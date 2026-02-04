@@ -1,6 +1,11 @@
 # Common
 node_modules
 
+# Environment
+.env
+.env.local
+.env.*.local
+
 # Backend
 backend/bin/
 backend/ide.db

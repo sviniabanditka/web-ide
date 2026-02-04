@@ -404,20 +404,26 @@ export const useAIStore = defineStore('ai', () => {
     }
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const wsUrl = `${protocol}//${window.location.host}/ws/ai/chats/${chatId}`
+    const token = localStorage.getItem('session_token') || ''
+    const wsUrl = `${protocol}//${window.location.host}/api/v1/ws/ai/chats/${chatId}?token=${token}`
+
+    console.log('[CHAT] Connecting to:', wsUrl)
 
     chatWs.value = new WebSocket(wsUrl)
 
     chatWs.value.onopen = () => {
+      console.log('[CHAT] WebSocket connected')
       wsConnected.value = true
     }
 
-    chatWs.value.onclose = () => {
+    chatWs.value.onclose = (e) => {
+      console.log('[CHAT] WebSocket closed:', e.code, e.reason)
       wsConnected.value = false
       chatWs.value = null
     }
 
-    chatWs.value.onerror = () => {
+    chatWs.value.onerror = (error) => {
+      console.error('[CHAT] WebSocket error:', error)
       wsConnected.value = false
     }
 
@@ -426,7 +432,7 @@ export const useAIStore = defineStore('ai', () => {
         const data = JSON.parse(event.data)
         handleChatWSMessage(data)
       } catch (e) {
-        console.error('Failed to parse chat WebSocket message:', e)
+        console.error('[CHAT] Failed to parse message:', e)
       }
     }
   }
@@ -450,7 +456,7 @@ export const useAIStore = defineStore('ai', () => {
           if (msgIndex !== -1) {
             chatMessages.value[msgIndex].content += payload.content
           }
-          streamingContent.value = chatMessages.value[msgIndex].content
+          streamingContent.value = chatMessages.value[msgIndex]?.content || ''
         }
       } else {
         streamingMessageId.value = null
@@ -459,24 +465,105 @@ export const useAIStore = defineStore('ai', () => {
       }
     } else if (data.type === 'message_created') {
       const payload = data.payload
-      chatMessages.value.push({
-        id: payload.id,
-        chat_id: payload.chat_id,
-        role: payload.role,
-        content: payload.content,
-        created_at: payload.created_at
-      })
+      const streamingIndex = chatMessages.value.findIndex(m => m.id === streamingMessageId.value)
+      if (streamingIndex !== -1) {
+        chatMessages.value[streamingIndex] = {
+          id: payload.id,
+          chat_id: payload.chat_id,
+          role: payload.role,
+          content: payload.content,
+          created_at: payload.created_at
+        }
+        streamingMessageId.value = null
+        streamingContent.value = ''
+      } else {
+        chatMessages.value.push({
+          id: payload.id,
+          chat_id: payload.chat_id,
+          role: payload.role,
+          content: payload.content,
+          created_at: payload.created_at
+        })
+      }
     }
   }
 
-  function sendChatMessage(content: string) {
-    if (!chatWs.value || chatWs.value.readyState !== WebSocket.OPEN) return
+  function sendChatMessage(content: string): Promise<void> {
+    return new Promise((resolve) => {
+      console.log('[CHAT] sendChatMessage called, readyState:', chatWs.value?.readyState)
 
-    isStreaming.value = true
-    chatWs.value.send(JSON.stringify({
-      type: 'send_message',
-      payload: { content }
-    }))
+      if (!chatWs.value) {
+        console.log('[CHAT] No WebSocket')
+        resolve()
+        return
+      }
+
+      if (chatWs.value.readyState === WebSocket.OPEN) {
+        isStreaming.value = true
+        const tempId = crypto.randomUUID()
+        chatMessages.value.push({
+          id: tempId,
+          chat_id: activeChat.value?.id || '',
+          role: 'user',
+          content,
+          created_at: new Date().toISOString()
+        })
+        const message = JSON.stringify({
+          type: 'send_message',
+          payload: { content }
+        })
+        console.log('[CHAT] Sending message:', message)
+        chatWs.value.send(message)
+        resolve()
+        return
+      }
+
+      if (chatWs.value.readyState === WebSocket.CONNECTING) {
+        console.log('[CHAT] WebSocket still connecting, waiting...')
+        const checkOpen = setInterval(() => {
+          if (!chatWs.value) {
+            clearInterval(checkOpen)
+            resolve()
+            return
+          }
+          if (chatWs.value.readyState === WebSocket.OPEN) {
+            clearInterval(checkOpen)
+            isStreaming.value = true
+            const tempId = crypto.randomUUID()
+            chatMessages.value.push({
+              id: tempId,
+              chat_id: activeChat.value?.id || '',
+              role: 'user',
+              content,
+              created_at: new Date().toISOString()
+            })
+            const message = JSON.stringify({
+              type: 'send_message',
+              payload: { content }
+            })
+            console.log('[CHAT] Sending after connect:', message)
+            chatWs.value.send(message)
+            resolve()
+          } else if (chatWs.value.readyState > WebSocket.CLOSING) {
+            clearInterval(checkOpen)
+            console.log('[CHAT] WebSocket failed to connect')
+            resolve()
+          }
+        }, 50)
+
+        setTimeout(() => {
+          clearInterval(checkOpen)
+          if (chatWs.value?.readyState !== WebSocket.OPEN) {
+            console.log('[CHAT] Timeout waiting for WebSocket')
+          }
+          resolve()
+        }, 5000)
+        return
+      }
+
+      console.log('[CHAT] WebSocket not ready, state:', chatWs.value.readyState)
+      resolve()
+    })
   }
 
   function stopStreaming() {

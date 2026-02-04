@@ -1,13 +1,14 @@
 package provider
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -132,21 +133,32 @@ func (m *MiniMax) Complete(ctx context.Context, messages []Message, cfg Config) 
 func (m *MiniMax) Stream(ctx context.Context, messages []Message, cfg Config) (<-chan Chunk, error) {
 	url := cfg.URL
 	if url == "" {
-		url = "https://api.minimax.chat/v1/text/chatcompletion_v2"
+		url = "https://api.minimax.io/anthropic/v1/messages"
 	}
 
-	reqBody := minimaxRequest{
+	type anthropicRequest struct {
+		Model       string    `json:"model"`
+		Messages    []Message `json:"messages"`
+		MaxTokens   int       `json:"max_tokens_to_sample"`
+		Temperature float64   `json:"temperature,omitempty"`
+		Stream      bool      `json:"stream"`
+	}
+
+	reqBody := anthropicRequest{
 		Model:       cfg.Model,
 		Messages:    messages,
 		MaxTokens:   cfg.MaxTokens,
 		Temperature: cfg.Temperature,
-		Stream:      true,
+		Stream:      false,
 	}
 
 	body, err := json.Marshal(reqBody)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
+
+	log.Printf("[MiniMax] URL: %s", url)
+	log.Printf("[MiniMax] Request: %s", string(body))
 
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(body))
 	if err != nil {
@@ -160,59 +172,65 @@ func (m *MiniMax) Stream(ctx context.Context, messages []Message, cfg Config) (<
 	if err != nil {
 		return nil, fmt.Errorf("request failed: %w", err)
 	}
+	defer resp.Body.Close()
+
+	log.Printf("[MiniMax] Status: %d", resp.StatusCode)
+
+	if resp.StatusCode != 200 {
+		respBody, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("api error: %s", string(respBody))
+	}
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	log.Printf("[MiniMax] Response body: %s", string(respBody))
+
+	type minimaxContentBlock struct {
+		Type     string `json:"type"`
+		Text     string `json:"text,omitempty"`
+		Thinking string `json:"thinking,omitempty"`
+	}
+
+	type minimaxResponse struct {
+		Content []minimaxContentBlock `json:"content"`
+	}
+
+	var respStruct struct {
+		Content []minimaxContentBlock `json:"content"`
+	}
+
+	if err := json.Unmarshal(respBody, &respStruct); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	if len(respStruct.Content) == 0 {
+		return nil, fmt.Errorf("no content in response")
+	}
+
+	var content strings.Builder
+	for _, block := range respStruct.Content {
+		if block.Type == "text" && block.Text != "" {
+			content.WriteString(block.Text)
+		}
+	}
+
+	fullContent := content.String()
+	log.Printf("[MiniMax] Full content: %s", fullContent)
 
 	ch := make(chan Chunk, 100)
 
 	go func() {
 		defer close(ch)
-		defer resp.Body.Close()
 
-		reader := bufio.NewReader(resp.Body)
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			default:
-				lineBytes, err := reader.ReadBytes('\n')
-				if err != nil {
-					if err != io.EOF {
-						ch <- Chunk{Done: true}
-					}
-					return
-				}
-
-				lineBytes = bytes.TrimSpace(lineBytes)
-				if len(lineBytes) == 0 {
-					continue
-				}
-
-				if !bytes.HasPrefix(lineBytes, []byte("data:")) {
-					continue
-				}
-
-				data := bytes.TrimSpace(lineBytes[5:])
-				if string(data) == "[DONE]" {
-					ch <- Chunk{Done: true}
-					return
-				}
-
-				var chunk streamChunk
-				if err := json.Unmarshal(data, &chunk); err != nil {
-					continue
-				}
-
-				if len(chunk.Choices) > 0 {
-					content := chunk.Choices[0].Delta.Content
-					if content != "" {
-						ch <- Chunk{Content: content, Done: false}
-					}
-					if chunk.Choices[0].FinishReason != "" {
-						ch <- Chunk{Done: true}
-						return
-					}
-				}
-			}
+		for _, r := range fullContent {
+			ch <- Chunk{Content: string(r), Done: false}
+			time.Sleep(10 * time.Millisecond)
 		}
+
+		ch <- Chunk{Done: true}
 	}()
 
 	return ch, nil

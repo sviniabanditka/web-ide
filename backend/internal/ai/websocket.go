@@ -90,13 +90,6 @@ func init() {
 }
 
 func RegisterWebSocketRoutes(app *fiber.App) {
-	app.Use("/ws/ai", func(c *fiber.Ctx) error {
-		if !websocket.IsWebSocketUpgrade(c) {
-			return fiber.ErrUpgradeRequired
-		}
-		return nil
-	})
-
 	app.Get("/ws/ai", websocket.New(func(c *websocket.Conn) {
 		client := &WSClient{
 			hub:      AIHub,

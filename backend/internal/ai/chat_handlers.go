@@ -134,8 +134,11 @@ func HandleListChatMessages(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid chat_id"})
 	}
 
-	rows, err := db.Query(ctx, "SELECT id, chat_id, role, content, created_at FROM chat_messages WHERE chat_id = $1 ORDER BY created_at ASC", chatID.String())
+	log.Printf("[HandleListChatMessages] Loading messages for chat: %s", chatID.String())
+
+	rows, err := db.Query(ctx, "SELECT id, chat_id, role, content, created_at FROM chat_messages WHERE chat_id = ? ORDER BY created_at ASC", chatID.String())
 	if err != nil {
+		log.Printf("[HandleListChatMessages] Query error: %v", err)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to query messages"})
 	}
 	defer rows.Close()
@@ -143,13 +146,18 @@ func HandleListChatMessages(c *fiber.Ctx) error {
 	var messages []models.ChatMessage
 	for rows.Next() {
 		var msg models.ChatMessage
-		err := rows.Scan(&msg.ID, &msg.ChatID, &msg.Role, &msg.Content, &msg.CreatedAt)
+		var content string
+		err := rows.Scan(&msg.ID, &msg.ChatID, &msg.Role, &content, &msg.CreatedAt)
 		if err != nil {
+			log.Printf("[HandleListChatMessages] Scan error: %v", err)
 			continue
 		}
+		msg.Content = content
+		log.Printf("[HandleListChatMessages] Loaded message: id=%s, role=%s, content_len=%d", msg.ID.String(), msg.Role, len(msg.Content))
 		messages = append(messages, msg)
 	}
 
+	log.Printf("[HandleListChatMessages] Total messages loaded: %d", len(messages))
 	return c.JSON(messages)
 }
 

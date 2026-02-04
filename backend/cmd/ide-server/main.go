@@ -183,7 +183,7 @@ func setupRoutes(app *fiber.App, cfg *config.Config) {
 	ai.RegisterRoutes(protected)
 	ai.RegisterChatRoutes(protected)
 	ai.RegisterWebSocketRoutes(app)
-	ai.RegisterChatWSRoutes(app)
+	ai.RegisterChatWSRoutes(protected)
 }
 
 func customErrorHandler(c *fiber.Ctx, err error) error {

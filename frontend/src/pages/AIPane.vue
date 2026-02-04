@@ -31,14 +31,12 @@
             v-for="msg in aiStore.chatMessages"
             :key="msg.id"
             class="chat-message"
-            :class="msg.role"
+            :class="[msg.role, { streaming: aiStore.streamingMessageId === msg.id && aiStore.isStreaming }]"
           >
             <div class="message-role">{{ msg.role === 'user' ? 'You' : 'AI' }}</div>
-            <div class="message-content">{{ msg.content }}</div>
-          </div>
-          <div v-if="aiStore.isStreaming" class="chat-message assistant streaming">
-            <div class="message-role">AI</div>
-            <div class="message-content">{{ aiStore.streamingContent }}<span class="cursor"></span></div>
+            <div class="message-content">
+              {{ msg.content }}<span v-if="aiStore.streamingMessageId === msg.id && aiStore.isStreaming" class="cursor"></span>
+            </div>
           </div>
         </div>
         <div class="chat-input">
@@ -138,7 +136,7 @@ async function sendMessage() {
   const content = userMessage.value
   userMessage.value = ''
 
-  aiStore.sendChatMessage(content)
+  await aiStore.sendChatMessage(content)
 }
 
 function stopStreaming() {
@@ -281,9 +279,11 @@ onUnmounted(() => {
   flex: 1;
   display: flex;
   flex-direction: column;
+  min-height: 0;
 }
 
 .chat-header {
+  flex-shrink: 0;
   padding: 12px 16px;
   border-bottom: 1px solid #3c3c3c;
 }
@@ -299,6 +299,7 @@ onUnmounted(() => {
   flex: 1;
   overflow-y: auto;
   padding: 16px;
+  min-height: 0;
 }
 
 .chat-message {
@@ -348,6 +349,7 @@ onUnmounted(() => {
   height: 14px;
   background: #888;
   margin-left: 2px;
+  vertical-align: middle;
   animation: blink 1s infinite;
 }
 
@@ -357,6 +359,7 @@ onUnmounted(() => {
 }
 
 .chat-input {
+  flex-shrink: 0;
   display: flex;
   flex-direction: column;
   gap: 8px;

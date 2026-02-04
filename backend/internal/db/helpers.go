@@ -112,7 +112,14 @@ func Update(ctx context.Context, table string, model interface{}) error {
 	values = append(values, id)
 
 	query := fmt.Sprintf("UPDATE %s SET %s WHERE id = $%d", table, join(sets, ", "), len(values))
+	log.Printf("[db.Update] Query: %s", query)
+	log.Printf("[db.Update] Values: %+v", values)
 	_, err := db.ExecContext(ctx, query, values...)
+	if err != nil {
+		log.Printf("[db.Update] Error: %v", err)
+	} else {
+		log.Printf("[db.Update] Success")
+	}
 	return err
 }
 

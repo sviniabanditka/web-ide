@@ -92,16 +92,38 @@ npm run build
 
 ### Environment Variables
 
+Create a `.env` file in the project root (see `.env.example`):
+
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `IDE_DATA_DIR` | Database directory | `/data` |
 | `IDE_PROJECTS_DIR` | Projects directory | `/projects` |
 | `IDE_HTTP_ADDR` | HTTP server address | `:8080` |
 | `IDE_SESSION_TTL_HOURS` | Session lifetime (hours) | 168 (7 days) |
+| `IDE_ALLOW_PROJECTS_SCAN` | Allow scanning for projects | `true` |
 | `IDE_MINIMAX_API_KEY` | MiniMax API key for AI | - |
 | `IDE_MINIMAX_MODEL` | AI model name | `abab6.5s-chat` |
+| `IDE_MINIMAX_URL` | MiniMax API URL (optional) | `https://api.minimax.chat/v1/text/chatcompletion_v2` |
 | `IDE_USER_BOOTSTRAP_EMAIL` | Default user email | - |
 | `IDE_USER_BOOTSTRAP_PASSWORD` | Default user password | - |
+
+### .env File
+
+```bash
+# Copy example to .env
+cp .env.example .env
+
+# Edit .env with your settings
+nano .env
+```
+
+### MiniMax URL Configuration
+
+If you're using MiniMax Coding Plan or a custom endpoint:
+
+```bash
+IDE_MINIMAX_URL=https://your-custom-endpoint.com/v1/text/chatcompletion_v2
+```
 
 ### Default Credentials
 
