@@ -34,8 +34,10 @@
             :class="[msg.role, { streaming: aiStore.streamingMessageId === msg.id && aiStore.isStreaming }]"
           >
             <div class="message-role">{{ msg.role === 'user' ? 'You' : 'AI' }}</div>
-            <div class="message-content">
-              {{ msg.content }}<span v-if="aiStore.streamingMessageId === msg.id && aiStore.isStreaming" class="cursor"></span>
+            <div class="message-content" :class="{ 'markdown-content': msg.role === 'assistant' }">
+              <div v-if="msg.role === 'user'">{{ msg.content }}</div>
+              <div v-else v-html="msg.parsedContent || ''"></div>
+              <span v-if="aiStore.streamingMessageId === msg.id && aiStore.isStreaming" class="cursor"></span>
             </div>
           </div>
         </div>
@@ -358,6 +360,98 @@ onUnmounted(() => {
   51%, 100% { opacity: 0; }
 }
 
+.markdown-content {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+}
+
+.markdown-content code {
+  background: #1a1a1a;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: 'SF Mono', Monaco, Consolas, monospace;
+  font-size: 12px;
+}
+
+.markdown-content pre {
+  background: #1a1a1a;
+  padding: 12px;
+  border-radius: 6px;
+  overflow-x: auto;
+  margin: 8px 0;
+}
+
+.markdown-content pre code {
+  background: none;
+  padding: 0;
+}
+
+.markdown-content p {
+  margin: 8px 0;
+}
+
+.markdown-content p:first-child {
+  margin-top: 0;
+}
+
+.markdown-content p:last-child {
+  margin-bottom: 0;
+}
+
+.markdown-content ul,
+.markdown-content ol {
+  margin: 8px 0;
+  padding-left: 32px;
+}
+
+.markdown-content li {
+  margin: 4px 0;
+}
+
+.markdown-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0;
+}
+
+.markdown-content th,
+.markdown-content td {
+  border: 1px solid #3c3c3c;
+  padding: 8px 12px;
+  text-align: left;
+}
+
+.markdown-content th {
+  background: #2d2d30;
+  font-weight: 600;
+}
+
+.markdown-content tr:nth-child(even) {
+  background: #252526;
+}
+
+.markdown-content a {
+  color: #6bb8ff;
+  text-decoration: none;
+}
+
+.markdown-content a:hover {
+  text-decoration: underline;
+}
+
+.markdown-content blockquote {
+  border-left: 3px solid #0e639c;
+  margin: 8px 0;
+  padding-left: 16px;
+  color: #888;
+}
+
+.markdown-content blockquote {
+  border-left: 3px solid #0e639c;
+  margin: 8px 0;
+  padding-left: 16px;
+  color: #888;
+}
+
 .chat-input {
   flex-shrink: 0;
   display: flex;
@@ -535,5 +629,92 @@ onUnmounted(() => {
   text-align: center;
   color: #666;
   font-size: 13px;
+}
+</style>
+
+<style>
+.ai-pane .markdown-content {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+}
+
+.ai-pane .markdown-content code {
+  background: #1a1a1a;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: 'SF Mono', Monaco, Consolas, monospace;
+  font-size: 12px;
+}
+
+.ai-pane .markdown-content pre {
+  background: #1a1a1a;
+  padding: 12px;
+  border-radius: 6px;
+  overflow-x: auto;
+  margin: 8px 0;
+}
+
+.ai-pane .markdown-content pre code {
+  background: none;
+  padding: 0;
+}
+
+.ai-pane .markdown-content p {
+  margin: 8px 0;
+}
+
+.ai-pane .markdown-content p:first-child {
+  margin-top: 0;
+}
+
+.ai-pane .markdown-content p:last-child {
+  margin-bottom: 0;
+}
+
+.ai-pane .markdown-content ul,
+.ai-pane .markdown-content ol {
+  margin: 8px 0;
+  padding-left: 32px;
+}
+
+.ai-pane .markdown-content li {
+  margin: 4px 0;
+}
+
+.ai-pane .markdown-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0;
+}
+
+.ai-pane .markdown-content th,
+.ai-pane .markdown-content td {
+  border: 1px solid #3c3c3c;
+  padding: 8px 12px;
+  text-align: left;
+}
+
+.ai-pane .markdown-content th {
+  background: #2d2d30;
+  font-weight: 600;
+}
+
+.ai-pane .markdown-content tr:nth-child(even) {
+  background: #252526;
+}
+
+.ai-pane .markdown-content a {
+  color: #6bb8ff;
+  text-decoration: none;
+}
+
+.ai-pane .markdown-content a:hover {
+  text-decoration: underline;
+}
+
+.ai-pane .markdown-content blockquote {
+  border-left: 3px solid #0e639c;
+  margin: 8px 0;
+  padding-left: 16px;
+  color: #888;
 }
 </style>

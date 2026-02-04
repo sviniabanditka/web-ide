@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { api } from '../api'
+import { parseMarkdown } from '../utils/markdown'
 
 export interface Job {
   id: string
@@ -43,6 +44,7 @@ export interface ChatMessage {
   chat_id: string
   role: 'user' | 'assistant' | 'system'
   content: string
+  parsedContent?: string
   created_at: string
 }
 
@@ -384,7 +386,10 @@ export const useAIStore = defineStore('ai', () => {
     error.value = null
     try {
       const response = await api.get(`/api/v1/projects/${currentProjectId}/ai/chats/${chatId}/messages`)
-      chatMessages.value = response.data || []
+      chatMessages.value = (response.data || []).map((msg: any) => ({
+        ...msg,
+        parsedContent: parseMarkdown(msg.content)
+      }))
     } catch (e: any) {
       error.value = e.response?.data?.error || 'Failed to fetch messages'
       chatMessages.value = []
@@ -449,12 +454,15 @@ export const useAIStore = defineStore('ai', () => {
             chat_id: activeChat.value?.id || '',
             role: 'assistant',
             content: payload.content,
+            parsedContent: parseMarkdown(payload.content),
             created_at: new Date().toISOString()
           })
         } else {
           const msgIndex = chatMessages.value.findIndex(m => m.id === payload.message_id)
           if (msgIndex !== -1) {
-            chatMessages.value[msgIndex].content += payload.content
+            const newContent = chatMessages.value[msgIndex].content + payload.content
+            chatMessages.value[msgIndex].content = newContent
+            chatMessages.value[msgIndex].parsedContent = parseMarkdown(newContent)
           }
           streamingContent.value = chatMessages.value[msgIndex]?.content || ''
         }
@@ -472,6 +480,7 @@ export const useAIStore = defineStore('ai', () => {
           chat_id: payload.chat_id,
           role: payload.role,
           content: payload.content,
+          parsedContent: parseMarkdown(payload.content),
           created_at: payload.created_at
         }
         streamingMessageId.value = null
@@ -482,6 +491,7 @@ export const useAIStore = defineStore('ai', () => {
           chat_id: payload.chat_id,
           role: payload.role,
           content: payload.content,
+          parsedContent: parseMarkdown(payload.content),
           created_at: payload.created_at
         })
       }
