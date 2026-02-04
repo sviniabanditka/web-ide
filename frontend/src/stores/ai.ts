@@ -364,6 +364,34 @@ export const useAIStore = defineStore('ai', () => {
     }
   }
 
+  async function updateChatTitle(chatId: string, title: string) {
+    try {
+      await api.put(`/api/v1/projects/${currentProjectId}/ai/chats/${chatId}/title`, { title })
+      const chatIndex = chats.value.findIndex(c => c.id === chatId)
+      if (chatIndex !== -1) {
+        chats.value[chatIndex].title = title
+      }
+      if (activeChat.value?.id === chatId) {
+        activeChat.value.title = title
+      }
+    } catch (e: any) {
+      console.error('Failed to update chat title:', e)
+    }
+  }
+
+  async function generateTitle(chatId: string, firstMessage: string) {
+    try {
+      const response = await api.post(`/api/v1/projects/${currentProjectId}/ai/chats/${chatId}/generate-title`, {
+        message: firstMessage
+      })
+      if (response.data.title) {
+        updateChatTitle(chatId, response.data.title)
+      }
+    } catch (e: any) {
+      console.error('Failed to generate title:', e)
+    }
+  }
+
   async function deleteChat(chatId: string) {
     loading.value = true
     error.value = null
@@ -511,6 +539,7 @@ export const useAIStore = defineStore('ai', () => {
       if (chatWs.value.readyState === WebSocket.OPEN) {
         isStreaming.value = true
         const tempId = crypto.randomUUID()
+        const isFirstMessage = chatMessages.value.length === 0
         chatMessages.value.push({
           id: tempId,
           chat_id: activeChat.value?.id || '',
@@ -518,12 +547,19 @@ export const useAIStore = defineStore('ai', () => {
           content,
           created_at: new Date().toISOString()
         })
+
+        if (isFirstMessage && activeChat.value?.title === 'New Chat') {
+          console.log('[CHAT] Generating title for first message')
+          generateTitle(activeChat.value.id, content)
+        }
+
         const message = JSON.stringify({
           type: 'send_message',
           payload: { content }
         })
         console.log('[CHAT] Sending message:', message)
         chatWs.value.send(message)
+
         resolve()
         return
       }
@@ -540,6 +576,7 @@ export const useAIStore = defineStore('ai', () => {
             clearInterval(checkOpen)
             isStreaming.value = true
             const tempId = crypto.randomUUID()
+            const isFirstMessage = chatMessages.value.length === 0
             chatMessages.value.push({
               id: tempId,
               chat_id: activeChat.value?.id || '',
@@ -553,6 +590,12 @@ export const useAIStore = defineStore('ai', () => {
             })
             console.log('[CHAT] Sending after connect:', message)
             chatWs.value.send(message)
+
+            if (isFirstMessage && activeChat.value?.title === 'New Chat') {
+              console.log('[CHAT] Generating title for first message (after connect)')
+              generateTitle(activeChat.value.id, content)
+            }
+
             resolve()
           } else if (chatWs.value.readyState > WebSocket.CLOSING) {
             clearInterval(checkOpen)
@@ -630,6 +673,7 @@ export const useAIStore = defineStore('ai', () => {
     fetchChats,
     createChat,
     deleteChat,
+    updateChatTitle,
     selectChat,
     fetchChatMessages,
     connectChatWS,

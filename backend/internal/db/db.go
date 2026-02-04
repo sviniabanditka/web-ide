@@ -168,10 +168,9 @@ func runMigrations() error {
 			role TEXT NOT NULL,
 			content TEXT NOT NULL,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+			updated_at DATETIME
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_chat_messages_chat ON chat_messages(chat_id)`,
-		`ALTER TABLE chat_messages ADD COLUMN updated_at DATETIME`,
 
 		`CREATE TABLE IF NOT EXISTS chat_changesets (
 			id TEXT PRIMARY KEY,

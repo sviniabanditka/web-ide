@@ -25,6 +25,8 @@ func RegisterChatRoutes(router fiber.Router) {
 
 	chat := chats.Group("/:chatId")
 	chat.Get("", HandleGetChat)
+	chat.Put("/title", HandleUpdateChatTitle)
+	chat.Post("/generate-title", HandleGenerateTitle)
 	chat.Delete("", HandleDeleteChat)
 
 	chatMessages := chat.Group("/messages")
@@ -110,6 +112,65 @@ func HandleGetChat(c *fiber.Ctx) error {
 	}
 
 	return c.JSON(chat)
+}
+
+func HandleUpdateChatTitle(c *fiber.Ctx) error {
+	ctx := c.Context()
+	chatID, err := uuid.Parse(c.Params("chatId"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid chat_id"})
+	}
+
+	var req struct {
+		Title string `json:"title"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request body"})
+	}
+
+	if req.Title == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "title is required"})
+	}
+
+	_, err = db.Exec(ctx, "UPDATE chats SET title = ?, updated_at = ? WHERE id = ?", req.Title, time.Now(), chatID.String())
+	if err != nil {
+		log.Printf("[HandleUpdateChatTitle] Failed to update: %v", err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to update title"})
+	}
+
+	return c.JSON(fiber.Map{"success": true})
+}
+
+func HandleGenerateTitle(c *fiber.Ctx) error {
+	ctx := c.Context()
+	chatID, err := uuid.Parse(c.Params("chatId"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid chat_id"})
+	}
+
+	var req struct {
+		Message string `json:"message"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request body"})
+	}
+
+	if req.Message == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "message is required"})
+	}
+
+	title := req.Message
+	if len(title) > 50 {
+		title = title[:47] + "..."
+	}
+
+	_, err = db.Exec(ctx, "UPDATE chats SET title = ?, updated_at = ? WHERE id = ?", title, time.Now(), chatID.String())
+	if err != nil {
+		log.Printf("[HandleGenerateTitle] Failed to update: %v", err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to update title"})
+	}
+
+	return c.JSON(fiber.Map{"title": title})
 }
 
 func HandleDeleteChat(c *fiber.Ctx) error {
