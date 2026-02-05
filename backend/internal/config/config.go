@@ -1,6 +1,7 @@
 package config
 
 import (
+	"log"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -129,6 +130,30 @@ func Load() (*Config, error) {
 		MiniMaxModel:      miniMaxModel,
 		MiniMaxURL:        miniMaxURL,
 	}, nil
+}
+
+func PrintEnvVars() {
+	envVars := []string{
+		"IDE_DATA_DIR",
+		"IDE_PROJECTS_DIR",
+		"IDE_HTTP_ADDR",
+		"IDE_SESSION_TTL_HOURS",
+		"IDE_USER_BOOTSTRAP_EMAIL",
+		"IDE_MINIMAX_API_KEY",
+		"IDE_MINIMAX_MODEL",
+		"IDE_MINIMAX_URL",
+	}
+
+	log.Println("=== Loaded Environment Variables ===")
+	for _, key := range envVars {
+		value := os.Getenv(key)
+		if value != "" {
+			log.Printf("  %s=%s", key, value)
+		} else {
+			log.Printf("  %s=(not set)", key)
+		}
+	}
+	log.Println("====================================")
 }
 
 func getEnv(key, defaultValue string) string {

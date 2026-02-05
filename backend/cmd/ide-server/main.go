@@ -26,6 +26,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
 	}
+	config.PrintEnvVars()
 
 	if err := db.Init(cfg.DataDir); err != nil {
 		log.Fatalf("Failed to init database: %v", err)
@@ -182,6 +183,7 @@ func setupRoutes(app *fiber.App, cfg *config.Config) {
 
 	ai.RegisterRoutes(protected)
 	ai.RegisterChatRoutes(protected)
+	ai.RegisterUsageRoutes(protected, cfg)
 	ai.RegisterWebSocketRoutes(app)
 	ai.RegisterChatWSRoutes(protected)
 }

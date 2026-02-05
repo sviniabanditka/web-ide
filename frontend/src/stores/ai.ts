@@ -90,6 +90,18 @@ export const useAIStore = defineStore('ai', () => {
   const streamingContent = ref('')
   const isStreaming = ref(false)
 
+  const usage = ref<{
+    remaining_credits: number
+    total_credits: number
+    used_credits: number
+    percent_used: number
+    total_count: number
+    usage_count: number
+    model_name: string
+    start_time: number
+    end_time: number
+  } | null>(null)
+
   function connectWebSocket() {
     if (ws) {
       ws.close()
@@ -642,6 +654,16 @@ export const useAIStore = defineStore('ai', () => {
     }
   }
 
+  async function fetchUsage() {
+    try {
+      const response = await api.get('/api/v1/ai/usage')
+      usage.value = response.data
+    } catch (e: any) {
+      console.error('Failed to fetch usage:', e)
+      usage.value = null
+    }
+  }
+
   return {
     jobs,
     changeSets,
@@ -681,6 +703,9 @@ export const useAIStore = defineStore('ai', () => {
     stopStreaming,
     isStreaming,
     streamingContent,
-    fetchChatChangeSets
+    streamingMessageId,
+    fetchChatChangeSets,
+    usage,
+    fetchUsage
   }
 })

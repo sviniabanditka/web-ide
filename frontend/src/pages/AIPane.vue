@@ -49,6 +49,7 @@
             :disabled="aiStore.isStreaming"
           ></textarea>
           <div class="input-actions">
+            <UsageRing />
             <button @click="stopStreaming" v-if="aiStore.isStreaming" class="stop-btn">
               Stop
             </button>
@@ -96,6 +97,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useAIStore, type Chat, type ChatChangeSet } from '../stores/ai'
+import UsageRing from '../components/UsageRing.vue'
 
 interface Project {
   id: string
@@ -482,6 +484,7 @@ onUnmounted(() => {
 
 .input-actions {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
   gap: 8px;
 }
