@@ -261,7 +261,7 @@ func (c *ChatWSClient) handleSendMessage(payload interface{}) {
 		Model:  cfg.MiniMaxModel,
 	}
 
-	p := provider.NewMiniMax()
+	p := provider.NewAnthropic(cfg.MiniMaxAPIKey, cfg.MiniMaxURL)
 
 	toolsList := tools.GlobalRegistry.ListForModel()
 	log.Printf("[WS-CHAT] Sending %d tools to model", len(toolsList))

@@ -10,6 +10,7 @@ node_modules
 backend/bin/
 backend/ide.db
 /data/
+backend/data
 /projects/
 
 # Frontend

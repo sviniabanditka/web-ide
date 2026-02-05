@@ -16,16 +16,16 @@ type WebSocketSender func(event WSEvent) error
 
 type AgentOrchestrator struct {
 	toolRegistry *tools.ToolRegistry
-	minimax      *provider.MiniMax
+	anthropic    *provider.Anthropic
 	policy       *PolicyEngine
 	mu           sync.RWMutex
 	sessions     map[uuid.UUID]*AgentSession
 }
 
-func NewOrchestrator(registry *tools.ToolRegistry, minimax *provider.MiniMax) *AgentOrchestrator {
+func NewOrchestrator(registry *tools.ToolRegistry, anthropic *provider.Anthropic) *AgentOrchestrator {
 	return &AgentOrchestrator{
 		toolRegistry: registry,
-		minimax:      minimax,
+		anthropic:    anthropic,
 		policy:       NewPolicyEngine(),
 		sessions:     make(map[uuid.UUID]*AgentSession),
 	}
@@ -78,7 +78,7 @@ func (o *AgentOrchestrator) Run(ctx context.Context, session *AgentSession, user
 		}
 
 		providerTools := convertToProviderTools(toolDefs)
-		stream, err := o.minimax.StreamWithTools(ctx, messages, provider.Config{
+		stream, err := o.anthropic.StreamWithTools(ctx, messages, provider.Config{
 			APIKey:      "",
 			Model:       "minimax",
 			MaxTokens:   4096,
@@ -423,40 +423,38 @@ func formatToolResult(result tools.ToolResult) string {
 	return string(data)
 }
 
-const DefaultSystemPrompt = `You are an AI assistant inside a WebIDE. You can interact with the project ONLY via the provided tools.
-Your job is to help the user by inspecting files, running commands, and making code changes.
+const DefaultSystemPrompt = `You are an AI assistant inside a WebIDE.
+
+### IMPORTANT: You MUST always specify arguments for tools!
+If you call a tool without arguments like {"name": "list_dir"} or {"name": "apply_patch"} with empty arguments {}, THE TOOL WILL FAIL!
+
+Examples of CORRECT tool calls:
+- {"name": "list_dir", "arguments": {"path": ".", "depth": 1}}
+- {"name": "read_file", "arguments": {"path": "main.go", "start_line": 1, "end_line": 50}}
+- {"name": "search_in_files", "arguments": {"query": "func main", "max_results": 20}}
+- {"name": "apply_patch", "arguments": {"patch": "--- /dev/null\n+++ hello.go\n@@ -0,0 +1,5 @@\n+package main\n+", "dry_run": true}}
+- {"name": "run_command", "arguments": {"cmd": "ls -la", "timeout_ms": 60000}}
+
+NEVER call a tool without all required arguments!
 
 ### Core rules
 1. DO use tools to interact with files and run commands.
-2. When asked to create a file, use apply_patch with a unified diff that creates the file.
+2. When asked to create a file, use apply_patch with a unified diff.
 3. When asked to modify a file, use apply_patch with a unified diff.
 4. Never tell users you "cannot" do something - use the tools available to you.
 
-### Tool capabilities
-- list_dir: List directory contents
-- read_file: Read file contents (use line ranges for large files)
-- search_in_files: Search for text patterns in files
-- apply_patch: Create or modify files using unified diffs
-- run_command: Execute shell commands
-- get_command_output: Get command output
-- cancel_command: Cancel running commands
+### Tool descriptions
+- list_dir: List directory contents. Required args: path, depth
+- read_file: Read file contents. Required args: path, optional: start_line, end_line
+- search_in_files: Search for text patterns. Required args: query, optional: max_results
+- apply_patch: Create or modify files using unified diffs. Required args: patch, optional: dry_run
+- run_command: Execute shell commands. Required args: cmd, optional: timeout_ms
 
 ### How to create a NEW file
-Use apply_patch with a patch that shows /dev/null as the original file.
-Example patch format:
-  --- /dev/null
-  +++ hello_world.go
-  @@ -0,0 +1,7 @@
-  +package main
-  +
-  +import "fmt"
-  +
-  +func main() {
-  +    fmt.Println("Hello, World!")
-  +}
+Use apply_patch with {"patch": "--- /dev/null\n+++ filename.go\n@@ -0,0 +1,3 @@\n+package main\n+"} and {"dry_run": true}
 
 ### How to modify an EXISTING file
-Use apply_patch with a unified diff showing the changes.
+Use apply_patch with {"patch": "diff content"} showing the changes.
 
 ### Workflow
 1. Use tools to understand the current state.

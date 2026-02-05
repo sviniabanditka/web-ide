@@ -32,8 +32,30 @@ type Chunk struct {
 	Done    bool
 }
 
+type ToolDefinition struct {
+	Type     string                 `json:"type"`
+	Function map[string]interface{} `json:"function"`
+}
+
+type ToolCall struct {
+	ID       string `json:"id"`
+	Type     string `json:"type"`
+	Function struct {
+		Name      string `json:"name"`
+		Arguments string `json:"arguments"`
+	} `json:"function"`
+}
+
+type StreamChunk struct {
+	Content       string     `json:"content,omitempty"`
+	ToolCalls     []ToolCall `json:"tool_calls,omitempty"`
+	ToolCallIndex int        `json:"tool_call_index,omitempty"`
+	Done          bool       `json:"done"`
+}
+
 type Provider interface {
 	Complete(ctx context.Context, messages []Message, cfg Config) (*Response, error)
 	Stream(ctx context.Context, messages []Message, cfg Config) (<-chan Chunk, error)
+	StreamWithTools(ctx context.Context, messages []Message, cfg Config, tools []ToolDefinition, toolChoice string) (<-chan StreamChunk, error)
 	Name() string
 }

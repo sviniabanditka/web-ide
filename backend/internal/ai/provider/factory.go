@@ -5,9 +5,10 @@ import "context"
 type ProviderType string
 
 const (
-	ProviderMiniMax ProviderType = "minimax"
-	ProviderOpenAI  ProviderType = "openai"
-	ProviderOllama  ProviderType = "ollama"
+	ProviderMiniMax   ProviderType = "minimax"
+	ProviderOpenAI    ProviderType = "openai"
+	ProviderOllama    ProviderType = "ollama"
+	ProviderAnthropic ProviderType = "anthropic"
 )
 
 type Factory struct {
@@ -18,7 +19,7 @@ func NewFactory() *Factory {
 	f := &Factory{
 		providers: make(map[ProviderType]func() Provider),
 	}
-	f.providers[ProviderMiniMax] = func() Provider { return NewMiniMax() }
+	f.providers[ProviderMiniMax] = func() Provider { return NewAnthropic("", "") }
 	return f
 }
 
@@ -41,9 +42,9 @@ func Complete(ctx context.Context, providerType ProviderType, messages []Message
 	case ProviderMiniMax:
 		p = factory.Create(ProviderMiniMax)
 	case ProviderOllama:
-		p = NewMiniMax() // Placeholder - would use Ollama
+		p = NewAnthropic("", "")
 	case ProviderOpenAI:
-		p = NewMiniMax() // Placeholder - would use OpenAI
+		p = NewAnthropic("", "")
 	default:
 		p = factory.Create(ProviderMiniMax)
 	}
