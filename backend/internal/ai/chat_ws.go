@@ -12,10 +12,16 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 	"github.com/webide/ide/backend/internal/ai/provider"
+	"github.com/webide/ide/backend/internal/ai/tools"
+	_ "github.com/webide/ide/backend/internal/ai/tools/builtin"
 	"github.com/webide/ide/backend/internal/config"
 	"github.com/webide/ide/backend/internal/db"
 	"github.com/webide/ide/backend/internal/models"
 )
+
+func init() {
+	log.Printf("[Tools] GlobalRegistry tools count: %d", len(tools.GlobalRegistry.List()))
+}
 
 type ChatWSClient struct {
 	chatID uuid.UUID
@@ -256,36 +262,172 @@ func (c *ChatWSClient) handleSendMessage(payload interface{}) {
 	}
 
 	p := provider.NewMiniMax()
-	chunks, err := p.Stream(ctx, messages, providerCfg)
-	if err != nil {
-		log.Printf("Failed to start streaming: %v", err)
-		return
+
+	toolsList := tools.GlobalRegistry.ListForModel()
+	log.Printf("[WS-CHAT] Sending %d tools to model", len(toolsList))
+	for i, t := range toolsList {
+		log.Printf("[WS-CHAT] Tool %d: %s", i, t.Function["name"])
 	}
 
-	var contentBuilder strings.Builder
-	log.Printf("[WS-CHAT] Starting to read chunks...")
-	for chunk := range chunks {
-		log.Printf("[WS-CHAT] Received chunk: content='%s', done=%v", chunk.Content, chunk.Done)
-		if chunk.Done {
-			log.Printf("[WS-CHAT] Chunk marked as done, breaking loop")
-			break
+	providerTools := make([]provider.ToolDefinition, len(toolsList))
+	for i, t := range toolsList {
+		providerTools[i] = provider.ToolDefinition{
+			Type:     t.Type,
+			Function: t.Function,
 		}
-		contentBuilder.WriteString(chunk.Content)
-		log.Printf("[WS-CHAT] Current built content: '%s' (len=%d)", contentBuilder.String(), contentBuilder.Len())
+	}
 
-		chunkJSON, _ := json.Marshal(ChatWSMessage{
-			Type: "chunk",
-			Payload: MessageChunkPayload{
-				MessageID: aiMsgID.String(),
-				Content:   chunk.Content,
-				Done:      false,
-			},
-		})
-		c.send <- chunkJSON
+	log.Printf("[WS-CHAT] Trying StreamWithTools first...")
+
+	var contentBuilder strings.Builder
+	var toolCalls []provider.ToolCall
+
+	// Try StreamWithTools first
+	chunks, err := p.StreamWithTools(ctx, messages, providerCfg, providerTools, "auto")
+	if err != nil {
+		log.Printf("[WS-CHAT] StreamWithTools failed: %v, falling back to Stream", err)
+		// Fallback to regular Stream
+		regularChunks, err := p.Stream(ctx, messages, providerCfg)
+		if err != nil {
+			log.Printf("[WS-CHAT] Failed to start streaming: %v", err)
+			return
+		}
+		for chunk := range regularChunks {
+			log.Printf("[WS-CHAT] Received chunk: content='%s', done=%v", chunk.Content, chunk.Done)
+			if chunk.Done {
+				break
+			}
+			contentBuilder.WriteString(chunk.Content)
+			chunkJSON, _ := json.Marshal(ChatWSMessage{
+				Type: "chunk",
+				Payload: MessageChunkPayload{
+					MessageID: aiMsgID.String(),
+					Content:   chunk.Content,
+					Done:      false,
+				},
+			})
+			c.send <- chunkJSON
+		}
+	} else {
+		// StreamWithTools worked
+		log.Printf("[WS-CHAT] StreamWithTools succeeded")
+		for chunk := range chunks {
+			log.Printf("[WS-CHAT] Received chunk: content='%s', done=%v, tool_calls=%d", chunk.Content, chunk.Done, len(chunk.ToolCalls))
+
+			if len(chunk.ToolCalls) > 0 {
+				log.Printf("[WS-CHAT] Tool calls detected: %d", len(chunk.ToolCalls))
+				for _, tc := range chunk.ToolCalls {
+					log.Printf("[WS-CHAT] Tool call: %s(%s)", tc.Function.Name, tc.Function.Arguments)
+				}
+				toolCalls = append(toolCalls, chunk.ToolCalls...)
+			}
+
+			if chunk.Content != "" {
+				contentBuilder.WriteString(chunk.Content)
+			}
+
+			if chunk.Content != "" {
+				chunkJSON, _ := json.Marshal(ChatWSMessage{
+					Type: "chunk",
+					Payload: MessageChunkPayload{
+						MessageID: aiMsgID.String(),
+						Content:   chunk.Content,
+						Done:      false,
+					},
+				})
+				c.send <- chunkJSON
+			}
+			if chunk.Done {
+				break
+			}
+		}
 	}
 
 	aiMsg.Content = contentBuilder.String()
 	log.Printf("[WS-CHAT] Final AI message content: '%s' (len=%d)", aiMsg.Content, len(aiMsg.Content))
+
+	if len(toolCalls) > 0 {
+		log.Printf("[WS-CHAT] Processing %d tool calls", len(toolCalls))
+
+		for _, tc := range toolCalls {
+			log.Printf("[WS-CHAT] Executing tool: %s", tc.Function.Name)
+
+			var args map[string]interface{}
+			if err := json.Unmarshal([]byte(tc.Function.Arguments), &args); err != nil {
+				log.Printf("[WS-CHAT] Failed to parse tool args: %v", err)
+				continue
+			}
+
+			tcToolContext := tools.ToolContext{
+				SessionID:   c.userID,
+				ProjectID:   c.chatID,
+				UserID:      c.userID,
+				ProjectRoot: "", // TODO: Get from project settings
+				Mode:        "write",
+				Limits: tools.ToolLimits{
+					MaxFileBytes:     512 * 1024,
+					MaxOutputBytes:   1024 * 1024,
+					MaxSearchResults: 200,
+					MaxPatchFiles:    10,
+					MaxToolTime:      5 * time.Minute,
+				},
+			}
+
+			result := tools.GlobalExecute(ctx, tc.Function.Name, args, tcToolContext)
+
+			log.Printf("[WS-CHAT] Tool result: ok=%v", result.OK)
+			if !result.OK && result.Error != nil {
+				log.Printf("[WS-CHAT] Tool error: %s - %s", result.Error.Code, result.Error.Message)
+			}
+
+			resultJSON, _ := json.Marshal(ChatWSMessage{
+				Type: "tool.result",
+				Payload: map[string]interface{}{
+					"id":     tc.ID,
+					"name":   tc.Function.Name,
+					"ok":     result.OK,
+					"result": result.Data,
+					"error":  result.Error,
+				},
+			})
+			c.send <- resultJSON
+
+			resultContent, _ := json.Marshal(result)
+			messages = append(messages, provider.Message{
+				Role:    "tool",
+				Content: string(resultContent),
+			})
+		}
+
+		log.Printf("[WS-CHAT] Making follow-up AI call with tool results")
+
+		secondChunks, err := p.StreamWithTools(ctx, messages, providerCfg, providerTools, "auto")
+		if err != nil {
+			log.Printf("[WS-CHAT] Follow-up streaming failed: %v", err)
+		} else {
+			for chunk := range secondChunks {
+				log.Printf("[WS-CHAT] Follow-up chunk: content='%s', done=%v", chunk.Content, chunk.Done)
+				if chunk.Content != "" {
+					contentBuilder.WriteString(chunk.Content)
+					chunkJSON, _ := json.Marshal(ChatWSMessage{
+						Type: "chunk",
+						Payload: MessageChunkPayload{
+							MessageID: aiMsgID.String(),
+							Content:   chunk.Content,
+							Done:      false,
+						},
+					})
+					c.send <- chunkJSON
+				}
+				if chunk.Done {
+					break
+				}
+			}
+		}
+
+		aiMsg.Content = contentBuilder.String()
+	}
+
 	db.Update(ctx, "chat_messages", aiMsg)
 
 	doneJSON, _ := json.Marshal(ChatWSMessage{
