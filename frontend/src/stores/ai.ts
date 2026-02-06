@@ -594,22 +594,24 @@ export const useAIStore = defineStore('ai', () => {
         const payload = data.payload
         console.log('[CHAT] tool_call received:', payload.name, payload.id, payload.assistant_msg_id)
         modelStatus.value = 'using_tool'
-        const toolCall: ToolCall = {
-          id: payload.id,
-          name: payload.name,
-          arguments: payload.arguments,
-          status: 'executing'
-        }
-        currentToolCall.value = toolCall
         const msgId = payload.assistant_msg_id || streamingMessageId.value
         if (msgId) {
           const msgIndex = chatMessages.value.findIndex(m => m.id === msgId)
           if (msgIndex !== -1) {
             const msg = chatMessages.value[msgIndex]
-            if (!msg.tool_calls) {
-              msg.tool_calls = []
+            const existingIndex = msg.tool_calls?.findIndex(t => t.id === payload.id) ?? -1
+            const toolCall = {
+              id: payload.id,
+              name: payload.name,
+              arguments: payload.arguments,
+              status: 'executing' as const
             }
-            msg.tool_calls.push(toolCall)
+            if (existingIndex >= 0 && msg.tool_calls) {
+              msg.tool_calls[existingIndex] = toolCall
+            } else {
+              if (!msg.tool_calls) msg.tool_calls = []
+              msg.tool_calls.push(toolCall)
+            }
             console.log('[CHAT] Added tool_call to message, total tool_calls:', msg.tool_calls.length)
           }
         } else {
@@ -619,23 +621,19 @@ export const useAIStore = defineStore('ai', () => {
         const payload = data.payload
         console.log('[CHAT] tool_result received:', payload.name, payload.ok, payload.assistant_msg_id)
         modelStatus.value = 'idle'
-        const toolResult: ToolResult = {
-          id: payload.id,
-          name: payload.name,
-          ok: payload.ok,
-          result: payload.result,
-          error: payload.error
-        }
-        currentToolCall.value = null
         const msgId = payload.assistant_msg_id || streamingMessageId.value
         if (msgId) {
           const msgIndex = chatMessages.value.findIndex(m => m.id === msgId)
           if (msgIndex !== -1) {
             const msg = chatMessages.value[msgIndex]
-            if (!msg.tool_results) {
-              msg.tool_results = []
-            }
-            msg.tool_results.push(toolResult)
+            if (!msg.tool_results) msg.tool_results = []
+            msg.tool_results.push({
+              id: payload.id,
+              name: payload.name,
+              ok: payload.ok,
+              result: payload.result,
+              error: payload.error
+            })
             console.log('[CHAT] Added tool_result to message')
             if (msg.tool_calls) {
               const tcIndex = msg.tool_calls.findIndex(tc => tc.id === payload.id)

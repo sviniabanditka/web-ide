@@ -58,6 +58,13 @@ function getStatusClass(): string {
   }
   return props.tool.status
 }
+
+function getStatusText(): string {
+  if (props.result) {
+    return props.result.ok ? 'completed' : 'error'
+  }
+  return props.tool.status
+}
 </script>
 
 <template>
@@ -65,9 +72,7 @@ function getStatusClass(): string {
     <div class="tool-header">
       <span class="tool-icon">{{ getToolIcon(tool.name) }}</span>
       <span class="tool-name">{{ tool.name }}</span>
-      <span class="tool-status" :class="getStatusClass()">
-        {{ result ? (result.ok ? 'completed' : 'error') : tool.status }}
-      </span>
+      <span class="tool-status-badge">{{ getStatusText() }}</span>
     </div>
     <div class="tool-arguments">
       <pre>{{ formatArguments(tool.arguments) }}</pre>
@@ -80,21 +85,25 @@ function getStatusClass(): string {
 
 <style scoped>
 .tool-block {
-  background: #1a1a2e;
-  border: 1px solid #3a3a5e;
-  border-left: 3px solid #3b82f6;
   border-radius: 8px;
   padding: 12px;
   margin: 8px 0;
-  transition: border-color 0.2s;
+  transition: all 0.2s;
+}
+
+.tool-block.executing {
+  background: #1a2a3a;
+  border: 1px solid #3b82f6;
 }
 
 .tool-block.completed {
-  border-left-color: #10b981;
+  background: #1a2e1a;
+  border: 1px solid #10b981;
 }
 
 .tool-block.error {
-  border-left-color: #ef4444;
+  background: #2e1a1a;
+  border: 1px solid #ef4444;
 }
 
 .tool-header {
@@ -113,7 +122,7 @@ function getStatusClass(): string {
   color: #e0e0e0;
 }
 
-.tool-status {
+.tool-status-badge {
   font-size: 11px;
   padding: 2px 8px;
   border-radius: 12px;
@@ -121,36 +130,38 @@ function getStatusClass(): string {
   text-transform: uppercase;
 }
 
-.tool-status.pending {
-  background: #f59e0b20;
-  color: #f59e0b;
-}
-
-.tool-status.approved {
-  background: #10b98120;
-  color: #10b981;
-}
-
-.tool-status.executing {
+.tool-block.executing .tool-status-badge {
   background: #3b82f620;
   color: #3b82f6;
 }
 
-.tool-status.completed {
+.tool-block.completed .tool-status-badge {
   background: #10b98120;
   color: #10b981;
 }
 
-.tool-status.error {
+.tool-block.error .tool-status-badge {
   background: #ef444420;
   color: #ef4444;
 }
 
 .tool-arguments {
-  background: #0f0f1a;
+  background: rgba(0, 0, 0, 0.3);
   border-radius: 4px;
   padding: 8px;
   overflow-x: auto;
+}
+
+.tool-block.executing .tool-arguments {
+  background: rgba(59, 130, 246, 0.1);
+}
+
+.tool-block.completed .tool-arguments {
+  background: rgba(16, 185, 129, 0.1);
+}
+
+.tool-block.error .tool-arguments {
+  background: rgba(239, 68, 68, 0.1);
 }
 
 .tool-arguments pre {
@@ -162,14 +173,18 @@ function getStatusClass(): string {
 
 .tool-result {
   margin-top: 8px;
-  background: #0f1a1a;
+  background: rgba(0, 0, 0, 0.2);
   border-radius: 4px;
   padding: 8px;
   overflow-x: auto;
 }
 
-.tool-result.error {
-  background: #1a0f0f;
+.tool-block.completed .tool-result {
+  background: rgba(16, 185, 129, 0.1);
+}
+
+.tool-block.error .tool-result {
+  background: rgba(239, 68, 68, 0.1);
 }
 
 .tool-result pre {
@@ -179,7 +194,8 @@ function getStatusClass(): string {
   color: #a0c0a0;
 }
 
-.tool-result.error pre {
+.tool-block.error .tool-result pre {
   color: #c0a0a0;
 }
 </style>
+

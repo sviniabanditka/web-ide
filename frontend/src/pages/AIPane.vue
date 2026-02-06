@@ -32,31 +32,16 @@
               <ThinkingBlock :thinking="msg.content" />
             </div>
             <div
-              v-else-if="msg.role === 'tool' && msg.tool_results?.length"
-              class="chat-message tool"
+              v-else-if="msg.role === 'assistant' && (msg.content || msg.tool_calls?.length)"
+              class="chat-message assistant"
+              :class="{ streaming: aiStore.streamingMessageId === msg.id && aiStore.isStreaming }"
             >
-              <div class="message-role">Tool</div>
-              <div class="tool-result-content">
-                <ToolBlock
-                  v-for="result in (msg.tool_results || [])"
-                  :key="result.id"
-                  :tool="{ id: result.id, name: result.name, arguments: {}, status: result.ok ? 'completed' : 'error' }"
-                  :result="result"
-                />
-              </div>
-            </div>
-            <div
-              v-else-if="msg.content || msg.tool_calls?.length"
-              class="chat-message"
-              :class="[msg.role, { streaming: aiStore.streamingMessageId === msg.id && aiStore.isStreaming }]"
-            >
-              <div class="message-role">{{ msg.role === 'user' ? 'You' : 'AI' }}</div>
-              <div class="message-content" :class="{ 'markdown-content': msg.role === 'assistant' }">
-                <div v-if="msg.role === 'user'">{{ msg.content }}</div>
-                <div v-else v-html="msg.parsedContent || ''"></div>
+              <div v-if="msg.content" class="message-role">AI</div>
+              <div v-if="msg.content" class="message-content markdown-content">
+                <div v-html="msg.parsedContent || ''"></div>
                 <span v-if="aiStore.streamingMessageId === msg.id && aiStore.isStreaming" class="cursor"></span>
               </div>
-              <div v-if="msg.tool_calls && msg.tool_calls.length > 0" class="message-tool-calls">
+              <div v-if="msg.tool_calls?.length" class="message-tool-calls">
                 <ToolBlock
                   v-for="tool in msg.tool_calls"
                   :key="tool.id"
@@ -64,6 +49,13 @@
                   :result="msg.tool_results?.find(r => r.id === tool.id)"
                 />
               </div>
+            </div>
+            <div
+              v-else-if="msg.role === 'user'"
+              class="chat-message user"
+            >
+              <div class="message-role">You</div>
+              <div class="message-content">{{ msg.content }}</div>
             </div>
           </template>
         </div>
