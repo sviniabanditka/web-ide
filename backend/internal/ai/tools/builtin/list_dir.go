@@ -158,5 +158,15 @@ func normalizePath(userPath, projectRoot string) (string, error) {
 		return "", os.ErrInvalid
 	}
 
-	return filepath.Join(projectRoot, userPath), nil
+	cleanPath := filepath.Clean(userPath)
+	if filepath.IsAbs(cleanPath) {
+		return cleanPath, nil
+	}
+
+	joined := filepath.Join(projectRoot, cleanPath)
+	if strings.HasPrefix(cleanPath, projectRoot) || strings.HasPrefix(joined, projectRoot) {
+		return cleanPath, nil
+	}
+
+	return joined, nil
 }

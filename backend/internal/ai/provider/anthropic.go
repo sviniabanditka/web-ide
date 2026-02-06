@@ -106,7 +106,7 @@ func (a *Anthropic) StreamWithTools(ctx context.Context, messages []Message, cfg
 			Temperature: anthropic.Float(cfg.Temperature),
 		})
 
-		var pendingToolCalls []ToolCall
+		pendingToolCalls := make(map[int]ToolCall)
 		var thinking strings.Builder
 
 		for stream.Next() {
@@ -120,10 +120,6 @@ func (a *Anthropic) StreamWithTools(ctx context.Context, messages []Message, cfg
 						ch <- StreamChunk{Content: block.Text, Done: false}
 					}
 				case anthropic.ToolUseBlock:
-					inputStr := string(block.Input)
-					if len(block.Input) > 0 && block.Input[0] == '[' {
-						inputStr = parseASCIIArray(block.Input)
-					}
 					tc := ToolCall{
 						ID:   block.ID,
 						Type: "function",
@@ -132,10 +128,10 @@ func (a *Anthropic) StreamWithTools(ctx context.Context, messages []Message, cfg
 							Arguments string `json:"arguments"`
 						}{
 							Name:      block.Name,
-							Arguments: inputStr,
+							Arguments: "",
 						},
 					}
-					pendingToolCalls = append(pendingToolCalls, tc)
+					pendingToolCalls[int(ev.Index)] = tc
 				case anthropic.ThinkingBlock:
 					if block.Thinking != "" {
 						thinking.WriteString(block.Thinking)
@@ -154,6 +150,16 @@ func (a *Anthropic) StreamWithTools(ctx context.Context, messages []Message, cfg
 						thinking.WriteString(delta.Thinking)
 						ch <- StreamChunk{Thinking: delta.Thinking, Done: false}
 					}
+				case anthropic.InputJSONDelta:
+					if delta.PartialJSON != "" {
+						chunkStr := parseASCIIArray([]byte(delta.PartialJSON))
+						if tc, ok := pendingToolCalls[int(ev.Index)]; ok {
+							tc.Function.Arguments += chunkStr
+							pendingToolCalls[int(ev.Index)] = tc
+						}
+					}
+				default:
+					log.Printf("[Anthropic] Unknown delta type: %T", ev.Delta.AsAny())
 				}
 			}
 		}

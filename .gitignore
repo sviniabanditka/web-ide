@@ -9,9 +9,10 @@ node_modules
 # Backend
 backend/bin/
 backend/ide.db
-/data/
-backend/data
-/projects/
+/data/*
+backend/data/*
+backend/projects/*
+/projects/*
 
 # Frontend
 frontend/node_modules/

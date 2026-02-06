@@ -5,11 +5,10 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"reflect"
 	"time"
 
 	"github.com/google/uuid"
-	_ "github.com/mattn/go-sqlite3"
-	"reflect"
 )
 
 func Insert(ctx context.Context, table string, model interface{}) error {
@@ -188,6 +187,23 @@ func scan(rows *sql.Rows, model interface{}) error {
 						fieldValue.SetBool(values[i].(bool))
 					case reflect.Float64:
 						fieldValue.SetFloat(values[i].(float64))
+					case reflect.Array:
+						if fieldValue.Type() == reflect.TypeOf(uuid.UUID{}) {
+							if val, ok := values[i].(string); ok {
+								u, err := uuid.Parse(val)
+								if err == nil {
+									for k := 0; k < 16; k++ {
+										fieldValue.Index(k).SetUint(uint64(u[k]))
+									}
+								}
+							}
+						}
+					case reflect.Struct:
+						if fieldValue.Type() == reflect.TypeOf(time.Time{}) {
+							if val, ok := values[i].(time.Time); ok {
+								fieldValue.Set(reflect.ValueOf(val))
+							}
+						}
 					}
 				}
 				break

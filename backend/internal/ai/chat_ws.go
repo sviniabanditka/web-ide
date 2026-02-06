@@ -48,13 +48,14 @@ func transformToolCallsToFrontend(tc []provider.ToolCall) []FrontendToolCall {
 }
 
 type ChatWSClient struct {
-	chatID uuid.UUID
-	userID uuid.UUID
-	conn   *websocket.Conn
-	send   chan []byte
-	mu     sync.Mutex
-	ctx    context.Context
-	cancel context.CancelFunc
+	chatID    uuid.UUID
+	userID    uuid.UUID
+	projectID uuid.UUID
+	conn      *websocket.Conn
+	send      chan []byte
+	mu        sync.Mutex
+	ctx       context.Context
+	cancel    context.CancelFunc
 }
 
 type ChatWSHub struct {
@@ -140,17 +141,34 @@ func ChatWebSocketHandler(c *fiber.Ctx) error {
 
 	log.Printf("[WS-CHAT] Authenticated user: %s", userID)
 
+	ctx := c.Context()
+	var chat models.Chat
+	if err := db.Get(ctx, &chat, "SELECT id, project_id, title, status, created_at, updated_at FROM chats WHERE id = $1", chatID.String()); err != nil {
+		log.Printf("[WS-CHAT] Chat not found: %v", err)
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "chat not found"})
+	}
+
+	log.Printf("[WS-CHAT] Chat %s belongs to project: %s", chatID, chat.ProjectID)
+
+	project, err := projects.GetProject(chat.ProjectID)
+	if err != nil {
+		log.Printf("[WS-CHAT] Failed to get project %s: %v", chat.ProjectID, err)
+	} else {
+		log.Printf("[WS-CHAT] Project: %s, RootPath: %s", project.Name, project.RootPath)
+	}
+
 	return websocket.New(func(conn *websocket.Conn) {
 		defer conn.Close()
 
-		ctx, cancel := context.WithCancel(context.Background())
+		wsCtx, cancel := context.WithCancel(context.Background())
 		client := &ChatWSClient{
-			chatID: chatID,
-			userID: userID,
-			conn:   conn,
-			send:   make(chan []byte, 256),
-			ctx:    ctx,
-			cancel: cancel,
+			chatID:    chatID,
+			userID:    userID,
+			projectID: chat.ProjectID,
+			conn:      conn,
+			send:      make(chan []byte, 256),
+			ctx:       wsCtx,
+			cancel:    cancel,
 		}
 
 		ChatHub.register <- client
@@ -276,9 +294,9 @@ func (c *ChatWSClient) handleSendMessage(payload interface{}) {
 	log.Printf("[WS-CHAT] Got %d messages for context", len(messages))
 
 	projectRoot := ""
-	project, err := projects.GetProject(c.chatID)
+	project, err := projects.GetProject(c.projectID)
 	if err != nil {
-		log.Printf("[WS-CHAT] Failed to get project %s: %v, using empty root", c.chatID, err)
+		log.Printf("[WS-CHAT] Failed to get project %s: %v, using empty root", c.projectID, err)
 	} else {
 		projectRoot = project.RootPath
 		log.Printf("[WS-CHAT] Project root: %s", projectRoot)
@@ -505,8 +523,6 @@ func (c *ChatWSClient) handleSendMessage(payload interface{}) {
 				continue
 			}
 
-			args = resolveToolPaths(args, projectRoot)
-
 			toolCallJSON, _ := json.Marshal(ChatWSMessage{
 				Type: "tool_call",
 				Payload: map[string]interface{}{
@@ -647,6 +663,11 @@ func resolvePath(path, projectRoot string) string {
 
 	if path == "." || path == "/" || path == "\\" {
 		return projectRoot
+	}
+
+	cleanPath := filepath.Clean(path)
+	if strings.HasPrefix(cleanPath, projectRoot) || strings.HasPrefix(filepath.Join(projectRoot, cleanPath), projectRoot) {
+		return cleanPath
 	}
 
 	if !strings.HasPrefix(path, "/") && !strings.HasPrefix(path, "\\") {

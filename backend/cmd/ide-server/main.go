@@ -28,6 +28,8 @@ func main() {
 	}
 	config.PrintEnvVars()
 
+	log.Printf("[MAIN] Using DataDir: %s", cfg.DataDir)
+
 	if err := db.Init(cfg.DataDir); err != nil {
 		log.Fatalf("Failed to init database: %v", err)
 	}

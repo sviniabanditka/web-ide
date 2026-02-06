@@ -94,12 +94,18 @@ func RunCommand() tools.Tool {
 				cwd = c
 			}
 
-			absCwd, err := filepath.Abs(filepath.Join(tc.ProjectRoot, cwd))
-			if err != nil {
-				return tools.NewErrorResult(tools.ErrCodeInvalidPath, "invalid cwd", nil), nil
+			cleanCwd := filepath.Clean(cwd)
+			var absCwd string
+			if cleanCwd == "." || cleanCwd == "" {
+				absCwd = tc.ProjectRoot
+			} else if filepath.IsAbs(cleanCwd) {
+				absCwd = cleanCwd
+			} else {
+				absCwd = filepath.Clean(filepath.Join(tc.ProjectRoot, cleanCwd))
 			}
 
-			if !strings.HasPrefix(absCwd, tc.ProjectRoot) {
+			cleanProjectRoot := filepath.Clean(tc.ProjectRoot)
+			if !strings.HasPrefix(absCwd, cleanProjectRoot) && !strings.HasPrefix(filepath.Clean(absCwd), cleanProjectRoot) {
 				return tools.NewErrorResult(tools.ErrCodePermission, "cwd outside project", nil), nil
 			}
 
