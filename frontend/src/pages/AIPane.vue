@@ -27,19 +27,45 @@
           <h3>{{ aiStore.activeChat.title }}</h3>
         </div>
         <div class="chat-messages" ref="chatContainer">
-          <div
-            v-for="msg in aiStore.chatMessages"
-            :key="msg.id"
-            class="chat-message"
-            :class="[msg.role, { streaming: aiStore.streamingMessageId === msg.id && aiStore.isStreaming }]"
-          >
-            <div class="message-role">{{ msg.role === 'user' ? 'You' : 'AI' }}</div>
-            <div class="message-content" :class="{ 'markdown-content': msg.role === 'assistant' }">
-              <div v-if="msg.role === 'user'">{{ msg.content }}</div>
-              <div v-else v-html="msg.parsedContent || ''"></div>
-              <span v-if="aiStore.streamingMessageId === msg.id && aiStore.isStreaming" class="cursor"></span>
+          <template v-for="msg in sortedMessages" :key="msg.id">
+            <div v-if="msg.role === 'thinking' && msg.content" class="thinking-message">
+              <ThinkingBlock :thinking="msg.content" />
             </div>
-          </div>
+            <div
+              v-else-if="msg.role === 'tool' && msg.tool_results?.length"
+              class="chat-message tool"
+            >
+              <div class="message-role">Tool</div>
+              <div class="tool-result-content">
+                <ToolBlock
+                  v-for="result in (msg.tool_results || [])"
+                  :key="result.id"
+                  :tool="{ id: result.id, name: result.name, arguments: {}, status: result.ok ? 'completed' : 'error' }"
+                  :result="result"
+                />
+              </div>
+            </div>
+            <div
+              v-else-if="msg.content || msg.tool_calls?.length"
+              class="chat-message"
+              :class="[msg.role, { streaming: aiStore.streamingMessageId === msg.id && aiStore.isStreaming }]"
+            >
+              <div class="message-role">{{ msg.role === 'user' ? 'You' : 'AI' }}</div>
+              <div class="message-content" :class="{ 'markdown-content': msg.role === 'assistant' }">
+                <div v-if="msg.role === 'user'">{{ msg.content }}</div>
+                <div v-else v-html="msg.parsedContent || ''"></div>
+                <span v-if="aiStore.streamingMessageId === msg.id && aiStore.isStreaming" class="cursor"></span>
+              </div>
+              <div v-if="msg.tool_calls && msg.tool_calls.length > 0" class="message-tool-calls">
+                <ToolBlock
+                  v-for="tool in msg.tool_calls"
+                  :key="tool.id"
+                  :tool="tool"
+                  :result="msg.tool_results?.find(r => r.id === tool.id)"
+                />
+              </div>
+            </div>
+          </template>
         </div>
         <div class="chat-input">
           <textarea
@@ -49,6 +75,10 @@
             :disabled="aiStore.isStreaming"
           ></textarea>
           <div class="input-actions">
+            <div v-if="aiStore.modelStatus !== 'idle'" class="model-status" :class="aiStore.modelStatus">
+              <span class="status-indicator"></span>
+              <span class="status-text">{{ getStatusText(aiStore.modelStatus) }}</span>
+            </div>
             <UsageRing />
             <button @click="stopStreaming" v-if="aiStore.isStreaming" class="stop-btn">
               Stop
@@ -95,9 +125,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
+import { ref, onMounted, onUnmounted, watch, nextTick, computed } from 'vue'
 import { useAIStore, type Chat, type ChatChangeSet } from '../stores/ai'
 import UsageRing from '../components/UsageRing.vue'
+import ToolBlock from '../components/ai/ToolBlock.vue'
+import ThinkingBlock from '../components/ai/ThinkingBlock.vue'
 
 interface Project {
   id: string
@@ -113,6 +145,21 @@ const aiStore = useAIStore()
 const userMessage = ref('')
 const chatContainer = ref<HTMLElement | null>(null)
 const chatChangeSets = ref<ChatChangeSet[]>([])
+
+const sortedMessages = computed(() => {
+  return [...aiStore.chatMessages]
+})
+
+function scrollToBottom() {
+  nextTick(() => {
+    if (chatContainer.value) {
+      chatContainer.value.scrollTop = chatContainer.value.scrollHeight
+    }
+  })
+}
+
+watch(() => aiStore.chatMessages.length, scrollToBottom)
+watch(() => aiStore.chatMessages, scrollToBottom, { deep: true })
 
 async function createNewChat() {
   const chat = await aiStore.createChat(props.project.id, 'New Chat')
@@ -157,15 +204,18 @@ function formatDate(dateStr: string): string {
   return date.toLocaleString()
 }
 
-function scrollToBottom() {
-  nextTick(() => {
-    if (chatContainer.value) {
-      chatContainer.value.scrollTop = chatContainer.value.scrollHeight
-    }
-  })
+function getStatusText(status: string): string {
+  const statusMap: Record<string, string> = {
+    thinking: 'Thinking...',
+    using_tool: 'Using tool...',
+    editing: 'Making edits...',
+    planning: 'Planning...'
+  }
+  return statusMap[status] || status
 }
 
 watch(() => aiStore.chatMessages.length, scrollToBottom)
+watch(() => aiStore.chatMessages, scrollToBottom, { deep: true })
 watch(() => aiStore.streamingContent, scrollToBottom)
 
 onMounted(async () => {
@@ -325,6 +375,10 @@ onUnmounted(() => {
   margin-bottom: 4px;
 }
 
+.chat-message.tool .message-role {
+  color: #10b981;
+}
+
 .message-content {
   padding: 10px 14px;
   border-radius: 8px;
@@ -341,6 +395,12 @@ onUnmounted(() => {
 .chat-message.assistant .message-content {
   background: #2d2d30;
   color: #ccc;
+}
+
+.chat-message.tool .message-content {
+  background: #1a2e1a;
+  border: 1px solid #10b981;
+  color: #a0c0a0;
 }
 
 .chat-message.streaming .message-content {
@@ -516,6 +576,60 @@ onUnmounted(() => {
 
 .stop-btn:hover {
   background: #d32f2f;
+}
+
+.model-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  margin-right: auto;
+}
+
+.status-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  animation: pulse 1.5s infinite;
+}
+
+.model-status.thinking .status-indicator {
+  background: #f59e0b;
+}
+
+.model-status.using_tool .status-indicator {
+  background: #3b82f6;
+}
+
+.model-status.editing .status-indicator {
+  background: #10b981;
+}
+
+.model-status.planning .status-indicator {
+  background: #8b5cf6;
+}
+
+.status-text {
+  color: #888;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.message-tool-calls,
+.message-tool-results {
+  margin-top: 8px;
+}
+
+.thinking-message {
+  margin-right: auto;
+  max-width: 80%;
+  margin-top: 8px;
+  margin-bottom: 8px;
 }
 
 .no-chat-selected {

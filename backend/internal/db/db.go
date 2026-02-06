@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -167,6 +168,9 @@ func runMigrations() error {
 			chat_id TEXT NOT NULL,
 			role TEXT NOT NULL,
 			content TEXT NOT NULL,
+			tool_calls_json TEXT,
+			tool_results_json TEXT,
+			thinking TEXT,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			updated_at DATETIME
 		)`,
@@ -189,6 +193,34 @@ func runMigrations() error {
 		if _, err := db.Exec(m); err != nil {
 			return fmt.Errorf("migration failed: %w", err)
 		}
+	}
+
+	if err := addMissingColumns(); err != nil {
+		log.Printf("Warning: failed to add missing columns: %v", err)
+	}
+
+	return nil
+}
+
+func addMissingColumns() error {
+	columns := []struct {
+		name string
+		typ  string
+	}{
+		{"tool_calls_json", "TEXT"},
+		{"tool_results_json", "TEXT"},
+		{"thinking", "TEXT"},
+	}
+
+	for _, col := range columns {
+		query := fmt.Sprintf("ALTER TABLE chat_messages ADD COLUMN %s %s", col.name, col.typ)
+		if _, err := db.Exec(query); err != nil {
+			if strings.Contains(err.Error(), "duplicate column name") {
+				continue
+			}
+			return fmt.Errorf("failed to add column %s: %w", col.name, err)
+		}
+		log.Printf("Added column: %s", col.name)
 	}
 
 	return nil

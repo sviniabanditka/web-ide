@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -17,10 +18,33 @@ import (
 	"github.com/webide/ide/backend/internal/config"
 	"github.com/webide/ide/backend/internal/db"
 	"github.com/webide/ide/backend/internal/models"
+	"github.com/webide/ide/backend/internal/projects"
 )
 
 func init() {
 	log.Printf("[Tools] GlobalRegistry tools count: %d", len(tools.GlobalRegistry.List()))
+}
+
+type FrontendToolCall struct {
+	ID        string                 `json:"id"`
+	Name      string                 `json:"name"`
+	Arguments map[string]interface{} `json:"arguments"`
+	Status    string                 `json:"status"`
+}
+
+func transformToolCallsToFrontend(tc []provider.ToolCall) []FrontendToolCall {
+	result := make([]FrontendToolCall, len(tc))
+	for i, t := range tc {
+		var args map[string]interface{}
+		json.Unmarshal([]byte(t.Function.Arguments), &args)
+		result[i] = FrontendToolCall{
+			ID:        t.ID,
+			Name:      t.Function.Name,
+			Arguments: args,
+			Status:    "pending",
+		}
+	}
+	return result
 }
 
 type ChatWSClient struct {
@@ -75,11 +99,13 @@ type MessageChunkPayload struct {
 }
 
 type MessageCreatedPayload struct {
-	ID        string    `json:"id"`
-	ChatID    string    `json:"chat_id"`
-	Role      string    `json:"role"`
-	Content   string    `json:"content"`
-	CreatedAt time.Time `json:"created_at"`
+	ID              string    `json:"id"`
+	ChatID          string    `json:"chat_id"`
+	Role            string    `json:"role"`
+	Content         string    `json:"content"`
+	ToolCallsJSON   string    `json:"tool_calls_json,omitempty"`
+	ToolResultsJSON string    `json:"tool_results_json,omitempty"`
+	CreatedAt       time.Time `json:"created_at"`
 }
 
 func RegisterChatWSRoutes(router fiber.Router) {
@@ -249,6 +275,15 @@ func (c *ChatWSClient) handleSendMessage(payload interface{}) {
 	}
 	log.Printf("[WS-CHAT] Got %d messages for context", len(messages))
 
+	projectRoot := ""
+	project, err := projects.GetProject(c.chatID)
+	if err != nil {
+		log.Printf("[WS-CHAT] Failed to get project %s: %v, using empty root", c.chatID, err)
+	} else {
+		projectRoot = project.RootPath
+		log.Printf("[WS-CHAT] Project root: %s", projectRoot)
+	}
+
 	cfg, err := config.Load()
 	if err != nil || cfg == nil {
 		log.Printf("Failed to load config: %v", err)
@@ -277,79 +312,191 @@ func (c *ChatWSClient) handleSendMessage(payload interface{}) {
 		}
 	}
 
-	log.Printf("[WS-CHAT] Trying StreamWithTools first...")
+	log.Printf("[WS-CHAT] Starting AI response processing...")
 
-	var contentBuilder strings.Builder
-	var toolCalls []provider.ToolCall
+	var allToolCalls []provider.ToolCall
+	var toolResults []map[string]interface{}
 
-	// Try StreamWithTools first
-	chunks, err := p.StreamWithTools(ctx, messages, providerCfg, providerTools, "auto")
-	if err != nil {
-		log.Printf("[WS-CHAT] StreamWithTools failed: %v, falling back to Stream", err)
-		// Fallback to regular Stream
-		regularChunks, err := p.Stream(ctx, messages, providerCfg)
+	aiResponseIndex := 0
+	maxIterations := 5
+
+	for aiResponseIndex < maxIterations {
+		aiResponseIndex++
+
+		newToolCalls := []provider.ToolCall{}
+
+		thinkingTime := time.Now().Add(-time.Millisecond)
+		currentThinkingMsgID := uuid.New()
+		currentThinkingMsg := &models.ChatMessage{
+			ID:        currentThinkingMsgID,
+			ChatID:    c.chatID,
+			Role:      "thinking",
+			Content:   "",
+			CreatedAt: thinkingTime,
+		}
+		if err := db.Insert(ctx, "chat_messages", currentThinkingMsg); err != nil {
+			log.Printf("[WS-CHAT] Failed to create thinking message: %v", err)
+		}
+		thinkingMsgJSON, _ := json.Marshal(ChatWSMessage{
+			Type: "message_created",
+			Payload: MessageCreatedPayload{
+				ID:        currentThinkingMsgID.String(),
+				ChatID:    c.chatID.String(),
+				Role:      "thinking",
+				Content:   "",
+				CreatedAt: thinkingTime,
+			},
+		})
+		c.send <- thinkingMsgJSON
+
+		statusJSON, _ := json.Marshal(ChatWSMessage{
+			Type: "status",
+			Payload: map[string]interface{}{
+				"status": "thinking",
+			},
+		})
+		c.send <- statusJSON
+
+		chunks, err := p.StreamWithTools(ctx, messages, providerCfg, providerTools, "auto")
 		if err != nil {
-			log.Printf("[WS-CHAT] Failed to start streaming: %v", err)
+			log.Printf("[WS-CHAT] Streaming failed: %v", err)
+			break
+		}
+
+		hasNewContent := false
+		hasNewThinking := false
+
+		currentAIMsgID := uuid.New()
+		currentAIMsg := &models.ChatMessage{
+			ID:        currentAIMsgID,
+			ChatID:    c.chatID,
+			Role:      "assistant",
+			Content:   "",
+			CreatedAt: time.Now(),
+		}
+
+		if err := db.Insert(ctx, "chat_messages", currentAIMsg); err != nil {
+			log.Printf("[WS-CHAT] Failed to create AI message: %v", err)
 			return
 		}
-		for chunk := range regularChunks {
-			log.Printf("[WS-CHAT] Received chunk: content='%s', done=%v", chunk.Content, chunk.Done)
-			if chunk.Done {
-				break
-			}
-			contentBuilder.WriteString(chunk.Content)
-			chunkJSON, _ := json.Marshal(ChatWSMessage{
-				Type: "chunk",
-				Payload: MessageChunkPayload{
-					MessageID: aiMsgID.String(),
-					Content:   chunk.Content,
-					Done:      false,
-				},
-			})
-			c.send <- chunkJSON
-		}
-	} else {
-		// StreamWithTools worked
-		log.Printf("[WS-CHAT] StreamWithTools succeeded")
+
+		aiMsgJSON, _ := json.Marshal(ChatWSMessage{
+			Type: "message_created",
+			Payload: MessageCreatedPayload{
+				ID:        currentAIMsg.ID.String(),
+				ChatID:    c.chatID.String(),
+				Role:      "assistant",
+				Content:   "",
+				CreatedAt: currentAIMsg.CreatedAt,
+			},
+		})
+		c.send <- aiMsgJSON
+
+		var contentBuilder strings.Builder
+		var thinkingBuilder strings.Builder
+
 		for chunk := range chunks {
-			log.Printf("[WS-CHAT] Received chunk: content='%s', done=%v, tool_calls=%d", chunk.Content, chunk.Done, len(chunk.ToolCalls))
+			log.Printf("[WS-CHAT] Chunk: content_len=%d, thinking_len=%d, done=%v, tool_calls=%d",
+				len(chunk.Content), len(chunk.Thinking), chunk.Done, len(chunk.ToolCalls))
 
 			if len(chunk.ToolCalls) > 0 {
 				log.Printf("[WS-CHAT] Tool calls detected: %d", len(chunk.ToolCalls))
 				for _, tc := range chunk.ToolCalls {
 					log.Printf("[WS-CHAT] Tool call: %s(%s)", tc.Function.Name, tc.Function.Arguments)
 				}
-				toolCalls = append(toolCalls, chunk.ToolCalls...)
+				newToolCalls = append(newToolCalls, chunk.ToolCalls...)
+				allToolCalls = append(allToolCalls, chunk.ToolCalls...)
+			}
+
+			if chunk.Thinking != "" {
+				hasNewThinking = true
+				thinkingBuilder.WriteString(chunk.Thinking)
+				currentThinkingMsg.Content = thinkingBuilder.String()
+				db.Update(ctx, "chat_messages", currentThinkingMsg)
+				chunkThinkingJSON, _ := json.Marshal(ChatWSMessage{
+					Type: "chunk",
+					Payload: MessageChunkPayload{
+						MessageID: currentThinkingMsgID.String(),
+						Content:   chunk.Thinking,
+						Done:      false,
+					},
+				})
+				c.send <- chunkThinkingJSON
 			}
 
 			if chunk.Content != "" {
+				hasNewContent = true
 				contentBuilder.WriteString(chunk.Content)
-			}
-
-			if chunk.Content != "" {
 				chunkJSON, _ := json.Marshal(ChatWSMessage{
 					Type: "chunk",
 					Payload: MessageChunkPayload{
-						MessageID: aiMsgID.String(),
+						MessageID: currentAIMsgID.String(),
 						Content:   chunk.Content,
 						Done:      false,
 					},
 				})
 				c.send <- chunkJSON
 			}
+
 			if chunk.Done {
 				break
 			}
 		}
-	}
 
-	aiMsg.Content = contentBuilder.String()
-	log.Printf("[WS-CHAT] Final AI message content: '%s' (len=%d)", aiMsg.Content, len(aiMsg.Content))
+		currentAIMsg.Content = contentBuilder.String()
+		currentAIMsg.Thinking = thinkingBuilder.String()
+		toolCallsJSON, _ := json.Marshal(allToolCalls)
+		currentAIMsg.ToolCallsJSON = string(toolCallsJSON)
+		db.Update(ctx, "chat_messages", currentAIMsg)
 
-	if len(toolCalls) > 0 {
-		log.Printf("[WS-CHAT] Processing %d tool calls", len(toolCalls))
+		doneThinkingJSON, _ := json.Marshal(ChatWSMessage{
+			Type: "chunk",
+			Payload: MessageChunkPayload{
+				MessageID: currentThinkingMsgID.String(),
+				Content:   "",
+				Done:      true,
+			},
+		})
+		c.send <- doneThinkingJSON
 
-		for _, tc := range toolCalls {
+		doneJSON, _ := json.Marshal(ChatWSMessage{
+			Type: "chunk",
+			Payload: MessageChunkPayload{
+				MessageID: currentAIMsgID.String(),
+				Content:   "",
+				Done:      true,
+			},
+		})
+		c.send <- doneJSON
+
+		frontendToolCalls := transformToolCallsToFrontend(newToolCalls)
+		frontendToolCallsJSON, _ := json.Marshal(frontendToolCalls)
+		toolResultsJSON, _ := json.Marshal(toolResults)
+		aiMsgJSON, _ = json.Marshal(ChatWSMessage{
+			Type: "message_created",
+			Payload: MessageCreatedPayload{
+				ID:              currentAIMsg.ID.String(),
+				ChatID:          c.chatID.String(),
+				Role:            "assistant",
+				Content:         currentAIMsg.Content,
+				ToolCallsJSON:   string(frontendToolCallsJSON),
+				ToolResultsJSON: string(toolResultsJSON),
+				CreatedAt:       currentAIMsg.CreatedAt,
+			},
+		})
+		c.send <- aiMsgJSON
+
+		log.Printf("[WS-CHAT] AI response %d done: content='%s', thinking='%s', new_tool_calls=%d, total=%d",
+			aiResponseIndex, currentAIMsg.Content, currentAIMsg.Thinking, len(newToolCalls), len(allToolCalls))
+
+		// If no new tool calls were made, we're done
+		if len(newToolCalls) == 0 {
+			log.Printf("[WS-CHAT] No new tool calls, finishing")
+			break
+		}
+
+		// Execute tool calls
+		for _, tc := range newToolCalls {
 			log.Printf("[WS-CHAT] Executing tool: %s", tc.Function.Name)
 
 			var args map[string]interface{}
@@ -358,11 +505,24 @@ func (c *ChatWSClient) handleSendMessage(payload interface{}) {
 				continue
 			}
 
+			args = resolveToolPaths(args, projectRoot)
+
+			toolCallJSON, _ := json.Marshal(ChatWSMessage{
+				Type: "tool_call",
+				Payload: map[string]interface{}{
+					"id":               tc.ID,
+					"name":             tc.Function.Name,
+					"arguments":        args,
+					"assistant_msg_id": currentAIMsgID.String(),
+				},
+			})
+			c.send <- toolCallJSON
+
 			tcToolContext := tools.ToolContext{
 				SessionID:   c.userID,
 				ProjectID:   c.chatID,
 				UserID:      c.userID,
-				ProjectRoot: "", // TODO: Get from project settings
+				ProjectRoot: projectRoot,
 				Mode:        "write",
 				Limits: tools.ToolLimits{
 					MaxFileBytes:     512 * 1024,
@@ -373,6 +533,7 @@ func (c *ChatWSClient) handleSendMessage(payload interface{}) {
 				},
 			}
 
+			log.Printf("[WS-CHAT] Executing tool with projectRoot=%s", projectRoot)
 			result := tools.GlobalExecute(ctx, tc.Function.Name, args, tcToolContext)
 
 			log.Printf("[WS-CHAT] Tool result: ok=%v", result.OK)
@@ -383,14 +544,23 @@ func (c *ChatWSClient) handleSendMessage(payload interface{}) {
 			resultJSON, _ := json.Marshal(ChatWSMessage{
 				Type: "tool.result",
 				Payload: map[string]interface{}{
-					"id":     tc.ID,
-					"name":   tc.Function.Name,
-					"ok":     result.OK,
-					"result": result.Data,
-					"error":  result.Error,
+					"id":               tc.ID,
+					"name":             tc.Function.Name,
+					"ok":               result.OK,
+					"result":           result.Data,
+					"error":            result.Error,
+					"assistant_msg_id": currentAIMsgID.String(),
 				},
 			})
 			c.send <- resultJSON
+
+			toolResults = append(toolResults, map[string]interface{}{
+				"id":     tc.ID,
+				"name":   tc.Function.Name,
+				"ok":     result.OK,
+				"result": result.Data,
+				"error":  result.Error,
+			})
 
 			resultContent, _ := json.Marshal(result)
 			messages = append(messages, provider.Message{
@@ -399,55 +569,23 @@ func (c *ChatWSClient) handleSendMessage(payload interface{}) {
 			})
 		}
 
-		log.Printf("[WS-CHAT] Making follow-up AI call with tool results")
-
-		secondChunks, err := p.StreamWithTools(ctx, messages, providerCfg, providerTools, "auto")
-		if err != nil {
-			log.Printf("[WS-CHAT] Follow-up streaming failed: %v", err)
-		} else {
-			for chunk := range secondChunks {
-				log.Printf("[WS-CHAT] Follow-up chunk: content='%s', done=%v", chunk.Content, chunk.Done)
-				if chunk.Content != "" {
-					contentBuilder.WriteString(chunk.Content)
-					chunkJSON, _ := json.Marshal(ChatWSMessage{
-						Type: "chunk",
-						Payload: MessageChunkPayload{
-							MessageID: aiMsgID.String(),
-							Content:   chunk.Content,
-							Done:      false,
-						},
-					})
-					c.send <- chunkJSON
-				}
-				if chunk.Done {
-					break
-				}
-			}
+		// If no new tool calls were added during this iteration, we're done
+		if len(newToolCalls) == 0 && !hasNewContent && !hasNewThinking {
+			log.Printf("[WS-CHAT] No new tool calls, content, or thinking, stopping iteration")
+			break
 		}
 
-		aiMsg.Content = contentBuilder.String()
+		log.Printf("[WS-CHAT] Making follow-up AI call %d", aiResponseIndex+1)
 	}
 
-	db.Update(ctx, "chat_messages", aiMsg)
-
-	doneJSON, _ := json.Marshal(ChatWSMessage{
-		Type: "chunk",
-		Payload: MessageChunkPayload{
-			MessageID: aiMsgID.String(),
-			Content:   "",
-			Done:      true,
+	// Send final idle status
+	statusIdleJSON, _ := json.Marshal(ChatWSMessage{
+		Type: "status",
+		Payload: map[string]interface{}{
+			"status": "idle",
 		},
 	})
-	c.send <- doneJSON
-
-	aiMsgJSON, _ := json.Marshal(MessageCreatedPayload{
-		ID:        aiMsg.ID.String(),
-		ChatID:    c.chatID.String(),
-		Role:      "assistant",
-		Content:   aiMsg.Content,
-		CreatedAt: aiMsg.CreatedAt,
-	})
-	c.send <- aiMsgJSON
+	c.send <- statusIdleJSON
 }
 
 func (c *ChatWSClient) getChatMessages() ([]provider.Message, error) {
@@ -469,6 +607,56 @@ func (c *ChatWSClient) getChatMessages() ([]provider.Message, error) {
 	}
 
 	return messages, nil
+}
+
+func resolveToolPaths(args map[string]interface{}, projectRoot string) map[string]interface{} {
+	if projectRoot == "" {
+		return args
+	}
+
+	pathFields := []string{"path", "file_path", "dir", "directory", "target", "source"}
+	modified := false
+
+	for _, field := range pathFields {
+		if val, ok := args[field]; ok {
+			if strVal, isStr := val.(string); isStr {
+				resolved := resolvePath(strVal, projectRoot)
+				if resolved != strVal {
+					args[field] = resolved
+					modified = true
+				}
+			}
+		}
+	}
+
+	if modified {
+		log.Printf("[WS-CHAT] Resolved paths relative to: %s", projectRoot)
+	}
+
+	return args
+}
+
+func resolvePath(path, projectRoot string) string {
+	if path == "" {
+		return path
+	}
+
+	if filepath.IsAbs(path) {
+		return path
+	}
+
+	if path == "." || path == "/" || path == "\\" {
+		return projectRoot
+	}
+
+	if !strings.HasPrefix(path, "/") && !strings.HasPrefix(path, "\\") {
+		if !strings.HasPrefix(path, "./") && !strings.HasPrefix(path, ".\\") {
+			return filepath.Join(projectRoot, path)
+		}
+	}
+
+	cleaned := filepath.Clean(filepath.Join(projectRoot, path))
+	return cleaned
 }
 
 func (c *ChatWSClient) writePump() {

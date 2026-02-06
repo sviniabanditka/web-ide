@@ -197,7 +197,7 @@ func HandleListChatMessages(c *fiber.Ctx) error {
 
 	log.Printf("[HandleListChatMessages] Loading messages for chat: %s", chatID.String())
 
-	rows, err := db.Query(ctx, "SELECT id, chat_id, role, content, created_at FROM chat_messages WHERE chat_id = ? ORDER BY created_at ASC", chatID.String())
+	rows, err := db.Query(ctx, "SELECT id, chat_id, role, COALESCE(content, ''), COALESCE(tool_calls_json, ''), COALESCE(tool_results_json, ''), COALESCE(thinking, ''), created_at FROM chat_messages WHERE chat_id = ? ORDER BY created_at ASC", chatID.String())
 	if err != nil {
 		log.Printf("[HandleListChatMessages] Query error: %v", err)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to query messages"})
@@ -207,13 +207,16 @@ func HandleListChatMessages(c *fiber.Ctx) error {
 	var messages []models.ChatMessage
 	for rows.Next() {
 		var msg models.ChatMessage
-		var content string
-		err := rows.Scan(&msg.ID, &msg.ChatID, &msg.Role, &content, &msg.CreatedAt)
+		var content, toolCallsJSON, toolResultsJSON, thinking string
+		err := rows.Scan(&msg.ID, &msg.ChatID, &msg.Role, &content, &toolCallsJSON, &toolResultsJSON, &thinking, &msg.CreatedAt)
 		if err != nil {
 			log.Printf("[HandleListChatMessages] Scan error: %v", err)
 			continue
 		}
 		msg.Content = content
+		msg.ToolCallsJSON = toolCallsJSON
+		msg.ToolResultsJSON = toolResultsJSON
+		msg.Thinking = thinking
 		log.Printf("[HandleListChatMessages] Loaded message: id=%s, role=%s, content_len=%d", msg.ID.String(), msg.Role, len(msg.Content))
 		messages = append(messages, msg)
 	}

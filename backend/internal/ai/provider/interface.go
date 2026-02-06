@@ -48,6 +48,7 @@ type ToolCall struct {
 
 type StreamChunk struct {
 	Content       string     `json:"content,omitempty"`
+	Thinking      string     `json:"thinking,omitempty"`
 	ToolCalls     []ToolCall `json:"tool_calls,omitempty"`
 	ToolCallIndex int        `json:"tool_call_index,omitempty"`
 	Done          bool       `json:"done"`

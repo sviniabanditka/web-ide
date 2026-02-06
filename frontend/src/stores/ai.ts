@@ -42,10 +42,31 @@ export interface ReviewThread {
 export interface ChatMessage {
   id: string
   chat_id: string
-  role: 'user' | 'assistant' | 'system'
+  role: 'user' | 'assistant' | 'system' | 'tool' | 'thinking'
   content: string
   parsedContent?: string
   created_at: string
+  tool_calls?: ToolCall[]
+  tool_results?: ToolResult[]
+  thinking?: string
+}
+
+export interface ToolCall {
+  id: string
+  name: string
+  arguments: Record<string, unknown>
+  status: 'pending' | 'approved' | 'rejected' | 'executing' | 'completed' | 'error'
+}
+
+export interface ToolResult {
+  id: string
+  name: string
+  ok: boolean
+  result?: Record<string, unknown>
+  error?: {
+    code: string
+    message: string
+  }
 }
 
 export interface Chat {
@@ -89,6 +110,8 @@ export const useAIStore = defineStore('ai', () => {
   const streamingMessageId = ref<string | null>(null)
   const streamingContent = ref('')
   const isStreaming = ref(false)
+  const modelStatus = ref<'idle' | 'thinking' | 'using_tool' | 'editing' | 'planning'>('idle')
+  const currentToolCall = ref<ToolCall | null>(null)
 
   const usage = ref<{
     remaining_credits: number
@@ -426,10 +449,19 @@ export const useAIStore = defineStore('ai', () => {
     error.value = null
     try {
       const response = await api.get(`/api/v1/projects/${currentProjectId}/ai/chats/${chatId}/messages`)
-      chatMessages.value = (response.data || []).map((msg: any) => ({
-        ...msg,
-        parsedContent: parseMarkdown(msg.content)
-      }))
+      console.log('[CHAT] Loaded messages:', response.data.length)
+      chatMessages.value = (response.data || []).map((msg: any) => {
+        const toolCalls = msg.tool_calls_json ? JSON.parse(msg.tool_calls_json || '[]') : []
+        const toolResults = msg.tool_results_json ? JSON.parse(msg.tool_results_json || '[]') : []
+        console.log('[CHAT] Message:', msg.id, 'tool_calls:', toolCalls.length, 'tool_results:', toolResults.length, 'thinking:', msg.thinking ? msg.thinking.substring(0, 50) + '...' : 'empty')
+        return {
+          ...msg,
+          parsedContent: parseMarkdown(msg.content),
+          tool_calls: toolCalls,
+          tool_results: toolResults,
+          thinking: msg.thinking || ''
+        }
+      })
     } catch (e: any) {
       error.value = e.response?.data?.error || 'Failed to fetch messages'
       chatMessages.value = []
@@ -482,11 +514,23 @@ export const useAIStore = defineStore('ai', () => {
     }
   }
 
+  let currentThinkingMsgId: string | null = null
+
   function handleChatWSMessage(data: any) {
     if (data.type === 'chunk') {
       const payload = data.payload
       if (!payload.done) {
-        if (streamingMessageId.value !== payload.message_id) {
+        const existingIndex = chatMessages.value.findIndex(m => m.id === payload.message_id)
+        if (existingIndex !== -1) {
+          if (payload.message_id === currentThinkingMsgId) {
+            chatMessages.value[existingIndex].content += payload.content
+          } else {
+            const newContent = chatMessages.value[existingIndex].content + payload.content
+            chatMessages.value[existingIndex].content = newContent
+            chatMessages.value[existingIndex].parsedContent = parseMarkdown(newContent)
+            streamingContent.value = newContent
+          }
+        } else if (payload.message_id !== currentThinkingMsgId) {
           streamingMessageId.value = payload.message_id
           streamingContent.value = payload.content
           chatMessages.value.push({
@@ -497,34 +541,42 @@ export const useAIStore = defineStore('ai', () => {
             parsedContent: parseMarkdown(payload.content),
             created_at: new Date().toISOString()
           })
-        } else {
-          const msgIndex = chatMessages.value.findIndex(m => m.id === payload.message_id)
-          if (msgIndex !== -1) {
-            const newContent = chatMessages.value[msgIndex].content + payload.content
-            chatMessages.value[msgIndex].content = newContent
-            chatMessages.value[msgIndex].parsedContent = parseMarkdown(newContent)
-          }
-          streamingContent.value = chatMessages.value[msgIndex]?.content || ''
         }
       } else {
-        streamingMessageId.value = null
-        streamingContent.value = ''
-        isStreaming.value = false
+        if (payload.message_id === currentThinkingMsgId) {
+          currentThinkingMsgId = null
+        } else {
+          streamingMessageId.value = null
+          streamingContent.value = ''
+          isStreaming.value = false
+        }
       }
-    } else if (data.type === 'message_created') {
+      } else if (data.type === 'message_created') {
       const payload = data.payload
-      const streamingIndex = chatMessages.value.findIndex(m => m.id === streamingMessageId.value)
-      if (streamingIndex !== -1) {
-        chatMessages.value[streamingIndex] = {
+      console.log('[CHAT] message_created:', payload.role, payload.id, 'content_len:', payload.content?.length)
+      if (payload.role === 'thinking') {
+        console.log('[CHAT] Thinking message received')
+        currentThinkingMsgId = payload.id
+      }
+      const toolCalls = payload.tool_calls_json ? JSON.parse(payload.tool_calls_json || '[]') : []
+      const toolResults = payload.tool_results_json ? JSON.parse(payload.tool_results_json || '[]') : []
+      const existingIndex = chatMessages.value.findIndex(m => m.id === payload.id)
+      if (existingIndex !== -1) {
+        chatMessages.value[existingIndex] = {
           id: payload.id,
           chat_id: payload.chat_id,
           role: payload.role,
           content: payload.content,
           parsedContent: parseMarkdown(payload.content),
+          tool_calls: toolCalls,
+          tool_results: toolResults,
           created_at: payload.created_at
         }
-        streamingMessageId.value = null
-        streamingContent.value = ''
+        if (payload.role === 'assistant') {
+          streamingMessageId.value = null
+          streamingContent.value = ''
+        }
+        console.log('[CHAT] Updated existing message')
       } else {
         chatMessages.value.push({
           id: payload.id,
@@ -532,11 +584,74 @@ export const useAIStore = defineStore('ai', () => {
           role: payload.role,
           content: payload.content,
           parsedContent: parseMarkdown(payload.content),
+          tool_calls: toolCalls,
+          tool_results: toolResults,
           created_at: payload.created_at
         })
+        console.log('[CHAT] Added new message, total:', chatMessages.value.length, 'last_role:', chatMessages.value[chatMessages.value.length - 1]?.role)
+      }
+      } else if (data.type === 'tool_call') {
+        const payload = data.payload
+        console.log('[CHAT] tool_call received:', payload.name, payload.id, payload.assistant_msg_id)
+        modelStatus.value = 'using_tool'
+        const toolCall: ToolCall = {
+          id: payload.id,
+          name: payload.name,
+          arguments: payload.arguments,
+          status: 'executing'
+        }
+        currentToolCall.value = toolCall
+        const msgId = payload.assistant_msg_id || streamingMessageId.value
+        if (msgId) {
+          const msgIndex = chatMessages.value.findIndex(m => m.id === msgId)
+          if (msgIndex !== -1) {
+            const msg = chatMessages.value[msgIndex]
+            if (!msg.tool_calls) {
+              msg.tool_calls = []
+            }
+            msg.tool_calls.push(toolCall)
+            console.log('[CHAT] Added tool_call to message, total tool_calls:', msg.tool_calls.length)
+          }
+        } else {
+          console.log('[CHAT] No message ID for tool_call yet')
+        }
+      } else if (data.type === 'tool.result') {
+        const payload = data.payload
+        console.log('[CHAT] tool_result received:', payload.name, payload.ok, payload.assistant_msg_id)
+        modelStatus.value = 'idle'
+        const toolResult: ToolResult = {
+          id: payload.id,
+          name: payload.name,
+          ok: payload.ok,
+          result: payload.result,
+          error: payload.error
+        }
+        currentToolCall.value = null
+        const msgId = payload.assistant_msg_id || streamingMessageId.value
+        if (msgId) {
+          const msgIndex = chatMessages.value.findIndex(m => m.id === msgId)
+          if (msgIndex !== -1) {
+            const msg = chatMessages.value[msgIndex]
+            if (!msg.tool_results) {
+              msg.tool_results = []
+            }
+            msg.tool_results.push(toolResult)
+            console.log('[CHAT] Added tool_result to message')
+            if (msg.tool_calls) {
+              const tcIndex = msg.tool_calls.findIndex(tc => tc.id === payload.id)
+              if (tcIndex !== -1) {
+                msg.tool_calls[tcIndex].status = payload.ok ? 'completed' : 'error'
+              }
+            }
+          }
+        }
+      } else if (data.type === 'status') {
+        const payload = data.payload
+        if (payload.status) {
+          modelStatus.value = payload.status
+        }
       }
     }
-  }
 
   function sendChatMessage(content: string): Promise<void> {
     return new Promise((resolve) => {
@@ -550,6 +665,7 @@ export const useAIStore = defineStore('ai', () => {
 
       if (chatWs.value.readyState === WebSocket.OPEN) {
         isStreaming.value = true
+        modelStatus.value = 'thinking'
         const tempId = crypto.randomUUID()
         const isFirstMessage = chatMessages.value.length === 0
         chatMessages.value.push({
@@ -638,6 +754,8 @@ export const useAIStore = defineStore('ai', () => {
     isStreaming.value = false
     streamingMessageId.value = null
     streamingContent.value = ''
+    modelStatus.value = 'idle'
+    currentToolCall.value = null
   }
 
   async function fetchChatChangeSets(chatId: string) {
@@ -706,6 +824,8 @@ export const useAIStore = defineStore('ai', () => {
     streamingMessageId,
     fetchChatChangeSets,
     usage,
-    fetchUsage
+    fetchUsage,
+    modelStatus,
+    currentToolCall
   }
 })

@@ -98,7 +98,7 @@ func (a *Anthropic) StreamWithTools(ctx context.Context, messages []Message, cfg
 	go func() {
 		defer close(ch)
 
-		msg, err := a.client.Messages.New(ctx, anthropic.MessageNewParams{
+		stream := a.client.Messages.NewStreaming(ctx, anthropic.MessageNewParams{
 			Model:       anthropic.Model(cfg.Model),
 			Messages:    apiMessages,
 			MaxTokens:   int64(cfg.MaxTokens),
@@ -106,50 +106,67 @@ func (a *Anthropic) StreamWithTools(ctx context.Context, messages []Message, cfg
 			Temperature: anthropic.Float(cfg.Temperature),
 		})
 
-		if err != nil {
-			log.Printf("[Anthropic] Non-streaming error: %v", err)
-			return
-		}
+		var pendingToolCalls []ToolCall
+		var thinking strings.Builder
 
-		var content strings.Builder
-		var toolCalls []ToolCall
+		for stream.Next() {
+			event := stream.Current()
 
-		for _, block := range msg.Content {
-			switch b := block.AsAny().(type) {
-			case anthropic.TextBlock:
-				content.WriteString(b.Text)
-
-			case anthropic.ToolUseBlock:
-				inputStr := string(b.Input)
-				if len(b.Input) > 0 && b.Input[0] == '[' {
-					inputStr = parseASCIIArray(b.Input)
+			switch ev := event.AsAny().(type) {
+			case anthropic.ContentBlockStartEvent:
+				switch block := ev.ContentBlock.AsAny().(type) {
+				case anthropic.TextBlock:
+					if block.Text != "" {
+						ch <- StreamChunk{Content: block.Text, Done: false}
+					}
+				case anthropic.ToolUseBlock:
+					inputStr := string(block.Input)
+					if len(block.Input) > 0 && block.Input[0] == '[' {
+						inputStr = parseASCIIArray(block.Input)
+					}
+					tc := ToolCall{
+						ID:   block.ID,
+						Type: "function",
+						Function: struct {
+							Name      string `json:"name"`
+							Arguments string `json:"arguments"`
+						}{
+							Name:      block.Name,
+							Arguments: inputStr,
+						},
+					}
+					pendingToolCalls = append(pendingToolCalls, tc)
+				case anthropic.ThinkingBlock:
+					if block.Thinking != "" {
+						thinking.WriteString(block.Thinking)
+						ch <- StreamChunk{Thinking: block.Thinking, Done: false}
+					}
 				}
 
-				tc := ToolCall{
-					ID:   b.ID,
-					Type: "function",
-					Function: struct {
-						Name      string `json:"name"`
-						Arguments string `json:"arguments"`
-					}{
-						Name:      b.Name,
-						Arguments: inputStr,
-					},
+			case anthropic.ContentBlockDeltaEvent:
+				switch delta := ev.Delta.AsAny().(type) {
+				case anthropic.TextDelta:
+					if delta.Text != "" {
+						ch <- StreamChunk{Content: delta.Text, Done: false}
+					}
+				case anthropic.ThinkingDelta:
+					if delta.Thinking != "" {
+						thinking.WriteString(delta.Thinking)
+						ch <- StreamChunk{Thinking: delta.Thinking, Done: false}
+					}
 				}
-				toolCalls = append(toolCalls, tc)
 			}
 		}
 
-		if content.Len() > 0 {
-			for _, r := range content.String() {
-				ch <- StreamChunk{Content: string(r), Done: false}
-			}
+		if err := stream.Err(); err != nil {
+			log.Printf("[Anthropic] Stream error: %v", err)
 		}
 
-		for _, tc := range toolCalls {
+		for i, tc := range pendingToolCalls {
 			ch <- StreamChunk{
-				ToolCalls: []ToolCall{tc},
-				Done:      false,
+				ToolCalls:     []ToolCall{tc},
+				ToolCallIndex: i,
+				Done:          false,
 			}
 		}
 

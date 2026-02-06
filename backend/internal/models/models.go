@@ -95,11 +95,14 @@ type Chat struct {
 }
 
 type ChatMessage struct {
-	ID        uuid.UUID `json:"id" db:"id"`
-	ChatID    uuid.UUID `json:"chat_id" db:"chat_id"`
-	Role      string    `json:"role" db:"role"`
-	Content   string    `json:"content" db:"content"`
-	CreatedAt time.Time `json:"created_at" db:"created_at"`
+	ID              uuid.UUID `json:"id" db:"id"`
+	ChatID          uuid.UUID `json:"chat_id" db:"chat_id"`
+	Role            string    `json:"role" db:"role"`
+	Content         string    `json:"content" db:"content"`
+	ToolCallsJSON   string    `json:"tool_calls_json,omitempty" db:"tool_calls_json"`
+	ToolResultsJSON string    `json:"tool_results_json,omitempty" db:"tool_results_json"`
+	Thinking        string    `json:"thinking,omitempty" db:"thinking"`
+	CreatedAt       time.Time `json:"created_at" db:"created_at"`
 }
 
 type ChatChangeSet struct {
