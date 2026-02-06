@@ -210,6 +210,7 @@ func addMissingColumns() error {
 		{"tool_calls_json", "TEXT"},
 		{"tool_results_json", "TEXT"},
 		{"thinking", "TEXT"},
+		{"tool_call_id", "TEXT"},
 	}
 
 	for _, col := range columns {

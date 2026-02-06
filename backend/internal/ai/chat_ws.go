@@ -577,11 +577,26 @@ func (c *ChatWSClient) handleSendMessage(payload interface{}) {
 				"result": result.Data,
 				"error":  result.Error,
 			})
+		}
 
-			resultContent, _ := json.Marshal(result)
+		if len(toolResults) > 0 {
+			toolResultsJSON, _ := json.Marshal(toolResults)
+			toolMsg := &models.ChatMessage{
+				ID:              uuid.New(),
+				ChatID:          c.chatID,
+				Role:            "user",
+				Content:         string(toolResultsJSON),
+				ToolResultsJSON: string(toolResultsJSON),
+				CreatedAt:       time.Now(),
+			}
+			if err := db.Insert(ctx, "chat_messages", toolMsg); err != nil {
+				log.Printf("[WS-CHAT] Failed to save tool results message: %v", err)
+			}
+
+			combinedContent := combineToolResults(toolResults)
 			messages = append(messages, provider.Message{
-				Role:    "tool",
-				Content: string(resultContent),
+				Role:    "user",
+				Content: combinedContent,
 			})
 		}
 
@@ -606,7 +621,7 @@ func (c *ChatWSClient) handleSendMessage(payload interface{}) {
 
 func (c *ChatWSClient) getChatMessages() ([]provider.Message, error) {
 	ctx := c.ctx
-	rows, err := db.Query(ctx, "SELECT role, content FROM chat_messages WHERE chat_id = $1 ORDER BY created_at ASC", c.chatID.String())
+	rows, err := db.Query(ctx, "SELECT id, chat_id, role, COALESCE(content, ''), COALESCE(tool_call_id, ''), COALESCE(tool_calls_json, ''), COALESCE(tool_results_json, ''), COALESCE(thinking, ''), created_at FROM chat_messages WHERE chat_id = $1 ORDER BY created_at ASC", c.chatID.String())
 	if err != nil {
 		return nil, err
 	}
@@ -614,12 +629,25 @@ func (c *ChatWSClient) getChatMessages() ([]provider.Message, error) {
 
 	var messages []provider.Message
 	for rows.Next() {
-		var role, content string
-		rows.Scan(&role, &content)
-		messages = append(messages, provider.Message{
-			Role:    role,
-			Content: content,
-		})
+		var msg models.ChatMessage
+		var content, toolCallID, toolCallsJSON, toolResultsJSON, thinking string
+		err := rows.Scan(&msg.ID, &msg.ChatID, &msg.Role, &content, &toolCallID, &toolCallsJSON, &toolResultsJSON, &thinking, &msg.CreatedAt)
+		if err != nil {
+			log.Printf("[WS-CHAT] Failed to scan message: %v", err)
+			continue
+		}
+		msg.Content = content
+		msg.ToolCallID = toolCallID
+		msg.ToolCallsJSON = toolCallsJSON
+		msg.ToolResultsJSON = toolResultsJSON
+		msg.Thinking = thinking
+
+		providerMsg := provider.Message{
+			Role:       msg.Role,
+			Content:    msg.Content,
+			ToolCallID: msg.ToolCallID,
+		}
+		messages = append(messages, providerMsg)
 	}
 
 	return messages, nil
@@ -690,4 +718,27 @@ func (c *ChatWSClient) writePump() {
 		}
 		c.conn.WriteMessage(websocket.TextMessage, message)
 	}
+}
+
+func combineToolResults(toolResults []map[string]interface{}) string {
+	var combined strings.Builder
+	for i, tr := range toolResults {
+		if i > 0 {
+			combined.WriteString("\n")
+		}
+		id := tr["id"].(string)
+		id = strings.TrimPrefix(id, "call_function_")
+		ok := tr["ok"].(bool)
+		if ok {
+			result := tr["result"]
+			resultJSON, _ := json.Marshal(result)
+			combined.Write(resultJSON)
+		} else if err, ok := tr["error"].(map[string]interface{}); ok {
+			if msg, ok := err["message"].(string); ok {
+				combined.WriteString("ERROR: ")
+				combined.WriteString(msg)
+			}
+		}
+	}
+	return combined.String()
 }

@@ -102,6 +102,7 @@ type ChatMessage struct {
 	ToolCallsJSON   string    `json:"tool_calls_json,omitempty" db:"tool_calls_json"`
 	ToolResultsJSON string    `json:"tool_results_json,omitempty" db:"tool_results_json"`
 	Thinking        string    `json:"thinking,omitempty" db:"thinking"`
+	ToolCallID      string    `json:"tool_call_id,omitempty" db:"tool_call_id"`
 	CreatedAt       time.Time `json:"created_at" db:"created_at"`
 }
 

@@ -93,6 +93,11 @@ func (a *Anthropic) StreamWithTools(ctx context.Context, messages []Message, cfg
 	apiMessages := convertMessages(messages)
 	apiTools := convertTools(tools)
 
+	log.Printf("[Anthropic] StreamWithTools: messages=%d, tools=%d, baseURL=%s", len(messages), len(tools), a.baseURL)
+	for i, msg := range messages {
+		log.Printf("[Anthropic] Message %d: role=%s, ToolCallID=%s", i, msg.Role, msg.ToolCallID)
+	}
+
 	ch := make(chan StreamChunk, 100)
 
 	go func() {
@@ -120,6 +125,7 @@ func (a *Anthropic) StreamWithTools(ctx context.Context, messages []Message, cfg
 						ch <- StreamChunk{Content: block.Text, Done: false}
 					}
 				case anthropic.ToolUseBlock:
+					log.Printf("[Anthropic] ToolUseBlock: ID=%s, Name=%s", block.ID, block.Name)
 					tc := ToolCall{
 						ID:   block.ID,
 						Type: "function",
@@ -132,6 +138,7 @@ func (a *Anthropic) StreamWithTools(ctx context.Context, messages []Message, cfg
 						},
 					}
 					pendingToolCalls[int(ev.Index)] = tc
+					log.Printf("[Anthropic] Stored tool call ID: %s", block.ID)
 				case anthropic.ThinkingBlock:
 					if block.Thinking != "" {
 						thinking.WriteString(block.Thinking)
@@ -188,8 +195,39 @@ func (a *Anthropic) Name() string {
 
 func convertMessages(messages []Message) []anthropic.MessageParam {
 	result := make([]anthropic.MessageParam, 0, len(messages))
-	for _, m := range messages {
-		result = append(result, anthropic.NewUserMessage(anthropic.NewTextBlock(m.Content)))
+	i := 0
+	for i < len(messages) {
+		m := messages[i]
+		switch m.Role {
+		case "user":
+			result = append(result, anthropic.NewUserMessage(anthropic.NewTextBlock(m.Content)))
+			i++
+		case "assistant":
+			result = append(result, anthropic.NewAssistantMessage(anthropic.NewTextBlock(m.Content)))
+			i++
+		case "tool":
+			var blocks []anthropic.ContentBlockParamUnion
+			for i < len(messages) && messages[i].Role == "tool" {
+				toolMsg := messages[i]
+				toolUseID := strings.TrimPrefix(toolMsg.ToolCallID, "call_function_")
+				log.Printf("[convertMessages] Tool result: originalID=%q, normalizedID=%q, contentLen=%d", toolMsg.ToolCallID, toolUseID, len(toolMsg.Content))
+				toolResultBlock := anthropic.ContentBlockParamUnion{
+					OfToolResult: &anthropic.ToolResultBlockParam{
+						ToolUseID: toolUseID,
+						Content: []anthropic.ToolResultBlockParamContentUnion{
+							{OfText: &anthropic.TextBlockParam{Text: toolMsg.Content}},
+						},
+					},
+				}
+				blocks = append(blocks, toolResultBlock)
+				i++
+			}
+			if len(blocks) > 0 {
+				result = append(result, anthropic.NewUserMessage(blocks...))
+			}
+		default:
+			i++
+		}
 	}
 	return result
 }
