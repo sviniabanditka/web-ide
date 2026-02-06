@@ -31,23 +31,23 @@
             <div v-if="msg.role === 'thinking' && msg.content" class="thinking-message">
               <ThinkingBlock :thinking="msg.content" />
             </div>
+            <div v-else-if="msg.role === 'tool_block' && msg.tool_calls?.length" class="message-tool-calls">
+              <ToolBlock
+                v-for="tool in msg.tool_calls"
+                :key="tool.id"
+                :tool="tool"
+                :result="msg.tool_results?.find(r => r.id === tool.id)"
+              />
+            </div>
             <div
-              v-else-if="msg.role === 'assistant' && (msg.content || msg.tool_calls?.length)"
+              v-else-if="msg.role === 'assistant' && msg.content"
               class="chat-message assistant"
               :class="{ streaming: aiStore.streamingMessageId === msg.id && aiStore.isStreaming }"
             >
-              <div v-if="msg.content" class="message-role">AI</div>
-              <div v-if="msg.content" class="message-content markdown-content">
+              <div class="message-role">AI</div>
+              <div class="message-content markdown-content">
                 <div v-html="msg.parsedContent || ''"></div>
                 <span v-if="aiStore.streamingMessageId === msg.id && aiStore.isStreaming" class="cursor"></span>
-              </div>
-              <div v-if="msg.tool_calls?.length" class="message-tool-calls">
-                <ToolBlock
-                  v-for="tool in msg.tool_calls"
-                  :key="tool.id"
-                  :tool="tool"
-                  :result="msg.tool_results?.find(r => r.id === tool.id)"
-                />
               </div>
             </div>
             <div

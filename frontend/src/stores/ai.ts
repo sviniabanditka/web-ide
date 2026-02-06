@@ -42,7 +42,7 @@ export interface ReviewThread {
 export interface ChatMessage {
   id: string
   chat_id: string
-  role: 'user' | 'assistant' | 'system' | 'tool' | 'thinking'
+  role: 'user' | 'assistant' | 'system' | 'tool' | 'thinking' | 'tool_block'
   content: string
   parsedContent?: string
   created_at: string
@@ -558,8 +558,6 @@ export const useAIStore = defineStore('ai', () => {
         console.log('[CHAT] Thinking message received')
         currentThinkingMsgId = payload.id
       }
-      const toolCalls = payload.tool_calls_json ? JSON.parse(payload.tool_calls_json || '[]') : []
-      const toolResults = payload.tool_results_json ? JSON.parse(payload.tool_results_json || '[]') : []
       const existingIndex = chatMessages.value.findIndex(m => m.id === payload.id)
       if (existingIndex !== -1) {
         chatMessages.value[existingIndex] = {
@@ -568,8 +566,6 @@ export const useAIStore = defineStore('ai', () => {
           role: payload.role,
           content: payload.content,
           parsedContent: parseMarkdown(payload.content),
-          tool_calls: toolCalls,
-          tool_results: toolResults,
           created_at: payload.created_at
         }
         if (payload.role === 'assistant') {
@@ -584,64 +580,49 @@ export const useAIStore = defineStore('ai', () => {
           role: payload.role,
           content: payload.content,
           parsedContent: parseMarkdown(payload.content),
-          tool_calls: toolCalls,
-          tool_results: toolResults,
           created_at: payload.created_at
         })
         console.log('[CHAT] Added new message, total:', chatMessages.value.length, 'last_role:', chatMessages.value[chatMessages.value.length - 1]?.role)
       }
       } else if (data.type === 'tool_call') {
         const payload = data.payload
-        console.log('[CHAT] tool_call received:', payload.name, payload.id, payload.assistant_msg_id)
+        console.log('[CHAT] tool_call received:', payload.name, payload.id)
         modelStatus.value = 'using_tool'
-        const msgId = payload.assistant_msg_id || streamingMessageId.value
-        if (msgId) {
-          const msgIndex = chatMessages.value.findIndex(m => m.id === msgId)
-          if (msgIndex !== -1) {
-            const msg = chatMessages.value[msgIndex]
-            const existingIndex = msg.tool_calls?.findIndex(t => t.id === payload.id) ?? -1
-            const toolCall = {
-              id: payload.id,
-              name: payload.name,
-              arguments: payload.arguments,
-              status: 'executing' as const
-            }
-            if (existingIndex >= 0 && msg.tool_calls) {
-              msg.tool_calls[existingIndex] = toolCall
-            } else {
-              if (!msg.tool_calls) msg.tool_calls = []
-              msg.tool_calls.push(toolCall)
-            }
-            console.log('[CHAT] Added tool_call to message, total tool_calls:', msg.tool_calls.length)
-          }
-        } else {
-          console.log('[CHAT] No message ID for tool_call yet')
-        }
+        const toolMsgId = payload.id + '_tool'
+        chatMessages.value.push({
+          id: toolMsgId,
+          chat_id: activeChat.value?.id || '',
+          role: 'tool_block',
+          content: '',
+          tool_calls: [{
+            id: payload.id,
+            name: payload.name,
+            arguments: payload.arguments,
+            status: 'executing'
+          }],
+          tool_results: [],
+          created_at: new Date().toISOString()
+        })
+        console.log('[CHAT] Added tool_block message')
       } else if (data.type === 'tool.result') {
         const payload = data.payload
-        console.log('[CHAT] tool_result received:', payload.name, payload.ok, payload.assistant_msg_id)
+        console.log('[CHAT] tool_result received:', payload.name, payload.ok)
         modelStatus.value = 'idle'
-        const msgId = payload.assistant_msg_id || streamingMessageId.value
-        if (msgId) {
-          const msgIndex = chatMessages.value.findIndex(m => m.id === msgId)
-          if (msgIndex !== -1) {
-            const msg = chatMessages.value[msgIndex]
-            if (!msg.tool_results) msg.tool_results = []
-            msg.tool_results.push({
-              id: payload.id,
-              name: payload.name,
-              ok: payload.ok,
-              result: payload.result,
-              error: payload.error
-            })
-            console.log('[CHAT] Added tool_result to message')
-            if (msg.tool_calls) {
-              const tcIndex = msg.tool_calls.findIndex(tc => tc.id === payload.id)
-              if (tcIndex !== -1) {
-                msg.tool_calls[tcIndex].status = payload.ok ? 'completed' : 'error'
-              }
-            }
+        const toolMsgId = payload.id + '_tool'
+        const msgIndex = chatMessages.value.findIndex(m => m.id === toolMsgId)
+        if (msgIndex !== -1) {
+          const msg = chatMessages.value[msgIndex]
+          if (msg.tool_calls?.[0]) {
+            msg.tool_calls[0].status = payload.ok ? 'completed' : 'error'
           }
+          msg.tool_results = [{
+            id: payload.id,
+            name: payload.name,
+            ok: payload.ok,
+            result: payload.result,
+            error: payload.error
+          }]
+          console.log('[CHAT] Updated tool_block')
         }
       } else if (data.type === 'status') {
         const payload = data.payload

@@ -87,7 +87,10 @@ function getStatusText(): string {
 .tool-block {
   border-radius: 8px;
   padding: 12px;
-  margin: 8px 0;
+  margin-right: auto;
+  max-width: 80%;
+  margin-top: 8px;
+  margin-bottom: 8px;
   transition: all 0.2s;
 }
 
