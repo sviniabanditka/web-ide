@@ -204,6 +204,19 @@ func runMigrations() error {
 			FOREIGN KEY (user_id) REFERENCES users(id)
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_user_settings_user ON user_settings(user_id)`,
+
+		`CREATE TABLE IF NOT EXISTS custom_themes (
+			id TEXT PRIMARY KEY,
+			user_id TEXT NOT NULL,
+			type TEXT NOT NULL CHECK(type IN ('ui', 'editor', 'terminal')),
+			name TEXT NOT NULL,
+			colors_json TEXT NOT NULL DEFAULT '{}',
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (user_id) REFERENCES users(id)
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_custom_themes_user ON custom_themes(user_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_custom_themes_user_type ON custom_themes(user_id, type)`,
 	}
 
 	for _, m := range migrations {

@@ -190,8 +190,6 @@ func GetThemes(c *fiber.Ctx) error {
 	themeType := c.Query("type", "ui")
 	themes := make([]map[string]interface{}, len(models.BuiltinThemes))
 	for i, theme := range models.BuiltinThemes {
-		var colors map[string]string
-		json.Unmarshal([]byte("{}"), &colors)
 		themes[i] = map[string]interface{}{
 			"id":     theme.ID,
 			"name":   theme.Name,
@@ -206,5 +204,231 @@ func GetThemes(c *fiber.Ctx) error {
 		}
 		return c.JSON(monacoThemes)
 	}
+	if themeType == "terminal" {
+		terminalThemes := []map[string]interface{}{
+			{"id": "monokai", "name": "Monokai"},
+			{"id": "nord", "name": "Nord"},
+			{"id": "dracula", "name": "Dracula"},
+			{"id": "github-dark", "name": "GitHub Dark"},
+			{"id": "github-light", "name": "GitHub Light"},
+			{"id": "one-dark", "name": "One Dark"},
+		}
+		return c.JSON(terminalThemes)
+	}
 	return c.JSON(themes)
+}
+
+func GetCustomThemes(c *fiber.Ctx) error {
+	userID, ok := c.Locals("user_id").(uuid.UUID)
+	if !ok {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
+	}
+
+	themeType := c.Query("type", "")
+
+	var query string
+	var args []interface{}
+
+	if themeType != "" {
+		query = "SELECT id, type, name, colors_json, created_at, updated_at FROM custom_themes WHERE user_id = ? AND type = ?"
+		args = []interface{}{userID, themeType}
+	} else {
+		query = "SELECT id, type, name, colors_json, created_at, updated_at FROM custom_themes WHERE user_id = ?"
+		args = []interface{}{userID}
+	}
+
+	rows, err := db.GetDB().Query(query, args...)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to get custom themes"})
+	}
+	defer rows.Close()
+
+	var themes []map[string]interface{}
+	for rows.Next() {
+		var id uuid.UUID
+		var themeType string
+		var name string
+		var colorsJSON string
+		var createdAt, updatedAt time.Time
+
+		if err := rows.Scan(&id, &themeType, &name, &colorsJSON, &createdAt, &updatedAt); err != nil {
+			continue
+		}
+
+		var colors map[string]interface{}
+		json.Unmarshal([]byte(colorsJSON), &colors)
+
+		themes = append(themes, map[string]interface{}{
+			"id":         id.String(),
+			"type":       themeType,
+			"name":       name,
+			"colors":     colors,
+			"created_at": createdAt,
+			"updated_at": updatedAt,
+		})
+	}
+
+	return c.JSON(themes)
+}
+
+func CreateCustomTheme(c *fiber.Ctx) error {
+	userID, ok := c.Locals("user_id").(uuid.UUID)
+	if !ok {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
+	}
+
+	var input struct {
+		Type   string            `json:"type"`
+		Name   string            `json:"name"`
+		Colors map[string]string `json:"colors"`
+	}
+
+	if err := c.BodyParser(&input); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request body"})
+	}
+
+	if input.Type == "" || input.Name == "" || len(input.Colors) == 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Type, name and colors are required"})
+	}
+
+	if input.Type != "ui" && input.Type != "editor" && input.Type != "terminal" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid theme type"})
+	}
+
+	colorsJSON, err := json.Marshal(input.Colors)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to marshal colors"})
+	}
+
+	themeID := uuid.New()
+	_, err = db.GetDB().Exec(`
+		INSERT INTO custom_themes (id, user_id, type, name, colors_json)
+		VALUES (?, ?, ?, ?, ?)`,
+		themeID, userID, input.Type, input.Name, string(colorsJSON))
+
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create custom theme"})
+	}
+
+	return c.JSON(map[string]interface{}{
+		"id":         themeID.String(),
+		"type":       input.Type,
+		"name":       input.Name,
+		"colors":     input.Colors,
+		"created_at": time.Now(),
+		"updated_at": time.Now(),
+	})
+}
+
+func UpdateCustomTheme(c *fiber.Ctx) error {
+	userID, ok := c.Locals("user_id").(uuid.UUID)
+	if !ok {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
+	}
+
+	themeIDStr := c.Params("id")
+	themeID, err := uuid.Parse(themeIDStr)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid theme ID"})
+	}
+
+	var input struct {
+		Name   string            `json:"name"`
+		Colors map[string]string `json:"colors"`
+	}
+
+	if err := c.BodyParser(&input); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request body"})
+	}
+
+	var existingTheme struct {
+		ID     uuid.UUID
+		UserID uuid.UUID
+	}
+
+	err = db.GetDB().QueryRow("SELECT id, user_id FROM custom_themes WHERE id = ?", themeID).Scan(&existingTheme.ID, &existingTheme.UserID)
+	if err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Theme not found"})
+	}
+
+	if existingTheme.UserID != userID {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Not authorized to update this theme"})
+	}
+
+	if input.Name == "" && len(input.Colors) == 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Name or colors are required"})
+	}
+
+	var setClauses []string
+	var args []interface{}
+
+	if input.Name != "" {
+		setClauses = append(setClauses, "name = ?")
+		args = append(args, input.Name)
+	}
+
+	if len(input.Colors) > 0 {
+		colorsJSON, err := json.Marshal(input.Colors)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to marshal colors"})
+		}
+		setClauses = append(setClauses, "colors_json = ?")
+		args = append(args, string(colorsJSON))
+	}
+
+	setClauses = append(setClauses, "updated_at = CURRENT_TIMESTAMP")
+	args = append(args, themeID)
+
+	query := "UPDATE custom_themes SET " + joinStrings(setClauses, ", ") + " WHERE id = ?"
+	_, err = db.GetDB().Exec(query, args...)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update theme"})
+	}
+
+	return c.JSON(map[string]interface{}{"status": "saved"})
+}
+
+func DeleteCustomTheme(c *fiber.Ctx) error {
+	userID, ok := c.Locals("user_id").(uuid.UUID)
+	if !ok {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
+	}
+
+	themeIDStr := c.Params("id")
+	themeID, err := uuid.Parse(themeIDStr)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid theme ID"})
+	}
+
+	var existingTheme struct {
+		ID     uuid.UUID
+		UserID uuid.UUID
+	}
+
+	err = db.GetDB().QueryRow("SELECT id, user_id FROM custom_themes WHERE id = ?", themeID).Scan(&existingTheme.ID, &existingTheme.UserID)
+	if err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Theme not found"})
+	}
+
+	if existingTheme.UserID != userID {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Not authorized to delete this theme"})
+	}
+
+	_, err = db.GetDB().Exec("DELETE FROM custom_themes WHERE id = ?", themeID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to delete theme"})
+	}
+
+	return c.JSON(map[string]interface{}{"status": "deleted"})
+}
+
+func joinStrings(strs []string, sep string) string {
+	if len(strs) == 0 {
+		return ""
+	}
+	result := strs[0]
+	for i := 1; i < len(strs); i++ {
+		result += sep + strs[i]
+	}
+	return result
 }

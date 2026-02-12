@@ -103,6 +103,18 @@ func setupRoutes(app *fiber.App, cfg *config.Config) {
 	settingsGroup.Get("/themes", func(c *fiber.Ctx) error {
 		return handlers.GetThemes(c)
 	})
+	settingsGroup.Get("/themes/custom", func(c *fiber.Ctx) error {
+		return handlers.GetCustomThemes(c)
+	})
+	settingsGroup.Post("/themes/custom", func(c *fiber.Ctx) error {
+		return handlers.CreateCustomTheme(c)
+	})
+	settingsGroup.Put("/themes/custom/:id", func(c *fiber.Ctx) error {
+		return handlers.UpdateCustomTheme(c)
+	})
+	settingsGroup.Delete("/themes/custom/:id", func(c *fiber.Ctx) error {
+		return handlers.DeleteCustomTheme(c)
+	})
 
 	projectsGroup := protected.Group("/projects")
 	projectsGroup.Get("", func(c *fiber.Ctx) error {

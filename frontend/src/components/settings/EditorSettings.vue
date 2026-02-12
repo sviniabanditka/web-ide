@@ -2,59 +2,56 @@
 import { computed } from 'vue'
 import Label from '@/components/ui/Label.vue'
 import { useSettingsStore } from '@/stores/settings'
+import CustomThemeEditor from './CustomThemeEditor.vue'
 
 const settingsStore = useSettingsStore()
 
-const themes = computed(() => settingsStore.editorThemes)
-const currentThemeId = computed(() => settingsStore.settings?.editor_theme_id || 'vs-dark')
+const currentEditorThemeId = computed(() => settingsStore.settings?.editor_theme_id || 'vs-dark')
 
-function selectTheme(themeId: string) {
+function updateEditorTheme(themeId: string) {
   settingsStore.saveSettings({ editor_theme_id: themeId })
 }
 </script>
 
 <template>
   <div class="space-y-6">
-    <div>
-      <Label class="text-base">Editor Color Scheme</Label>
-      <p class="text-sm text-muted-foreground mt-1 mb-4">
-        Choose a color theme for the Monaco Editor
-      </p>
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-        <button
-          v-for="theme in themes"
-          :key="theme.id"
-          @click="selectTheme(theme.id)"
-          :class="[
-            'relative p-3 rounded-lg border-2 transition-all text-left',
-            currentThemeId === theme.id
-              ? 'border-primary ring-2 ring-primary/20'
-              : 'border-border hover:border-primary/50'
-          ]"
-        >
-          <div
-            class="h-12 rounded flex items-center justify-center text-xs font-medium"
-            :style="{
-              backgroundColor: theme.id === 'vs' ? '#ffffff' : theme.id === 'hc-black' ? '#000000' : '#1e1e1e',
-              color: theme.id === 'vs' ? '#333333' : theme.id === 'hc-black' ? '#ffffff' : '#d4d4d4'
-            }"
-          >
-            {{ theme.name }}
-          </div>
-          <div class="font-medium text-sm mt-2">{{ theme.name }}</div>
-          <div
-            v-if="currentThemeId === theme.id"
-            class="absolute top-2 right-2 w-2 h-2 rounded-full bg-primary"
-          />
-        </button>
-      </div>
-    </div>
+    <CustomThemeEditor
+      theme-type="editor"
+      :current-theme-id="currentEditorThemeId"
+      @update:themeId="updateEditorTheme"
+    />
 
     <div class="pt-4 border-t">
-      <Label class="text-base">Current Editor Theme</Label>
-      <p class="text-sm text-muted-foreground mt-1">
-        Selected: <span class="font-medium">{{ themes.find(t => t.id === currentThemeId)?.name }}</span>
+      <Label class="text-base">Editor Theme Preview</Label>
+      <p class="text-sm text-muted-foreground mt-1 mb-3">
+        Selected: <span class="font-medium">{{ settingsStore.editorThemes.find(t => t.id === currentEditorThemeId)?.name }}</span>
       </p>
+
+      <div
+        class="rounded-lg border overflow-hidden"
+        :style="{ backgroundColor: '#1e1e1e', borderColor: '#454545' }"
+      >
+        <div class="flex items-center gap-1 p-2 border-b" :style="{ borderColor: '#454545', backgroundColor: '#252526' }">
+          <div class="w-3 h-3 rounded-full" :style="{ backgroundColor: '#ff5f56' }" />
+          <div class="w-3 h-3 rounded-full" :style="{ backgroundColor: '#ffbd2e' }" />
+          <div class="w-3 h-3 rounded-full" :style="{ backgroundColor: '#27c93f' }" />
+          <span class="text-xs ml-2" :style="{ color: '#858585' }">editor.js</span>
+        </div>
+        <div class="p-4 font-mono text-sm">
+          <div class="flex">
+            <span class="w-6 text-right mr-3 select-none" :style="{ color: '#858585' }">1</span>
+            <span :style="{ color: '#d4d4d4' }"><span :style="{ color: '#569cd6' }">function</span> <span :style="{ color: '#dcdcaa' }">hello</span>() {'{'}</span>
+          </div>
+          <div class="flex">
+            <span class="w-6 text-right mr-3 select-none" :style="{ color: '#858585' }">2</span>
+            <span class="pl-4" :style="{ color: '#d4d4d4' }"><span :style="{ color: '#c586c0' }">return</span> <span :style="{ color: '#ce9178' }">'Hello!'</span>;</span>
+          </div>
+          <div class="flex">
+            <span class="w-6 text-right mr-3 select-none" :style="{ color: '#858585' }">3</span>
+            <span :style="{ color: '#d4d4d4' }">{'}'}</span>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </template>

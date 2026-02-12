@@ -1,113 +1,41 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import Button from '@/components/ui/Button.vue'
-import Label from '@/components/ui/Label.vue'
+import { computed } from 'vue'
 import { useSettingsStore } from '@/stores/settings'
+import CustomThemeEditor from './CustomThemeEditor.vue'
+import Label from '@/components/ui/Label.vue'
 
 const settingsStore = useSettingsStore()
 
-const customThemeName = ref('')
-const isCreatingCustom = ref(false)
+const currentUIThemeId = computed(() => settingsStore.settings?.ui_theme_id || 'dark-plus')
 
-const themes = computed(() => settingsStore.uiThemes)
-const currentThemeId = computed(() => settingsStore.settings?.ui_theme_id || 'dark-plus')
-
-function selectTheme(themeId: string) {
+function updateUITheme(themeId: string) {
   settingsStore.saveSettings({ ui_theme_id: themeId })
-}
-
-function startCreatingCustom() {
-  isCreatingCustom.value = true
-  customThemeName.value = ''
-}
-
-function cancelCreatingCustom() {
-  isCreatingCustom.value = false
-}
-
-async function createCustomTheme() {
-  if (!customThemeName.value.trim()) return
-  isCreatingCustom.value = false
 }
 </script>
 
 <template>
   <div class="space-y-6">
-    <div>
-      <Label class="text-base">Interface Theme</Label>
-      <p class="text-sm text-muted-foreground mt-1 mb-4">
-        Choose a color theme for the user interface
-      </p>
-      <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
-        <button
-          v-for="theme in themes"
-          :key="theme.id"
-          @click="selectTheme(theme.id)"
-          :class="[
-            'relative p-3 rounded-lg border-2 transition-all text-left',
-            currentThemeId === theme.id
-              ? 'border-primary ring-2 ring-primary/20'
-              : 'border-border hover:border-primary/50'
-          ]"
-        >
-          <div
-            class="h-16 rounded-md mb-2 flex gap-0.5 overflow-hidden"
-            :style="{ backgroundColor: theme.id === 'dark-plus' ? '#1e1e1e' : theme.id === 'light-plus' ? '#ffffff' : '#272822' }"
-          >
-            <div
-              v-for="i in 5"
-              :key="i"
-              class="flex-1 flex flex-col gap-0.5 p-1"
-            >
-              <div
-                v-for="j in 3"
-                :key="j"
-                class="h-2 rounded-sm"
-                :style="{
-                  backgroundColor: j === 1 ? '#007acc' : j === 2 ? '#3c3c3c' : '#858585'
-                }"
-              />
-            </div>
-          </div>
-          <div class="font-medium text-sm">{{ theme.name }}</div>
-          <div
-            v-if="currentThemeId === theme.id"
-            class="absolute top-2 right-2 w-2 h-2 rounded-full bg-primary"
-          />
-        </button>
-      </div>
-    </div>
+    <CustomThemeEditor
+      theme-type="ui"
+      :current-theme-id="currentUIThemeId"
+      @update:themeId="updateUITheme"
+    />
 
     <div class="pt-4 border-t">
-      <Label class="text-base">Custom Themes</Label>
-      <p class="text-sm text-muted-foreground mt-1 mb-4">
-        Create and manage custom color themes
-      </p>
-
-      <div v-if="!isCreatingCustom">
-        <Button variant="outline" @click="startCreatingCustom">
-          Create Custom Theme
-        </Button>
-      </div>
-
-      <div v-else class="p-4 rounded-lg border bg-card space-y-3">
-        <div class="font-medium text-sm">New Custom Theme</div>
-        <div>
-          <Label for="themeName">Theme Name</Label>
-          <input
-            id="themeName"
-            v-model="customThemeName"
-            class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm mt-1"
-            placeholder="My Custom Theme"
-          />
+      <Label class="text-base">UI Color Preview</Label>
+      <div class="mt-3 p-4 rounded-lg border space-y-3" :style="{ backgroundColor: 'var(--background)', color: 'var(--foreground)' }">
+        <div class="flex items-center gap-2">
+          <span class="px-2 py-1 rounded text-xs font-medium" :style="{ backgroundColor: 'var(--primary)', color: 'var(--primary-foreground)' }">Primary</span>
+          <span class="px-2 py-1 rounded text-xs font-medium" :style="{ backgroundColor: 'var(--secondary)', color: 'var(--secondary-foreground)' }">Secondary</span>
+          <span class="px-2 py-1 rounded text-xs font-medium" :style="{ backgroundColor: 'var(--accent)', color: 'var(--accent-foreground)' }">Accent</span>
         </div>
-        <div class="flex gap-2">
-          <Button size="sm" @click="createCustomTheme" :disabled="!customThemeName.trim()">
-            Create
-          </Button>
-          <Button size="sm" variant="ghost" @click="cancelCreatingCustom">
-            Cancel
-          </Button>
+        <div class="flex items-center gap-2">
+          <span class="text-sm" :style="{ color: 'var(--muted-foreground)' }">Muted text</span>
+          <span class="text-sm border px-2 py-0.5 rounded" :style="{ borderColor: 'var(--border)' }">Border</span>
+          <span class="text-sm px-2 py-0.5 rounded" :style="{ backgroundColor: 'var(--card)', color: 'var(--card-foreground)' }">Card</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="text-sm px-2 py-0.5 rounded bg-destructive/10" :style="{ color: 'var(--destructive)' }">Destructive</span>
         </div>
       </div>
     </div>
