@@ -33,94 +33,25 @@ function getToolIcon(name: string): string {
 </script>
 
 <template>
-  <div class="tool-call-card">
-    <div class="tool-header">
-      <span class="tool-icon">{{ getToolIcon(tool.name) }}</span>
-      <span class="tool-name">{{ tool.name }}</span>
-      <span v-if="tool.status !== 'pending'" class="tool-status" :class="tool.status">
+  <div class="rounded-lg border bg-card p-3 mt-2">
+    <div class="flex items-center gap-2 mb-2">
+      <span class="text-lg">{{ getToolIcon(tool.name) }}</span>
+      <span class="font-semibold">{{ tool.name }}</span>
+      <Badge v-if="tool.status !== 'pending'" variant="outline" class="ml-auto text-xs">
         {{ tool.status }}
-      </span>
+      </Badge>
     </div>
-    <div class="tool-arguments">
-      <pre>{{ formatArguments(tool.arguments) }}</pre>
+    <div class="bg-muted/50 rounded p-2 overflow-x-auto">
+      <pre class="font-mono text-xs text-muted-foreground">{{ formatArguments(tool.arguments) }}</pre>
     </div>
   </div>
 </template>
 
-<style scoped>
-.tool-call-card {
-  background: #1a1a2e;
-  border: 1px solid #3a3a5e;
-  border-radius: 8px;
-  padding: 12px;
-  margin: 8px 0;
-}
+<script lang="ts">
+import { defineComponent } from 'vue'
+import Badge from '@/components/ui/Badge.vue'
 
-.tool-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
-}
-
-.tool-icon {
-  font-size: 18px;
-}
-
-.tool-name {
-  font-weight: 600;
-  color: #e0e0e0;
-}
-
-.tool-status {
-  font-size: 11px;
-  padding: 2px 8px;
-  border-radius: 12px;
-  margin-left: auto;
-  text-transform: uppercase;
-}
-
-.tool-status.pending {
-  background: #f59e0b20;
-  color: #f59e0b;
-}
-
-.tool-status.approved {
-  background: #10b98120;
-  color: #10b981;
-}
-
-.tool-status.rejected {
-  background: #ef444420;
-  color: #ef4444;
-}
-
-.tool-status.executing {
-  background: #3b82f620;
-  color: #3b82f6;
-}
-
-.tool-status.completed {
-  background: #10b98120;
-  color: #10b981;
-}
-
-.tool-status.error {
-  background: #ef444420;
-  color: #ef4444;
-}
-
-.tool-arguments {
-  background: #0f0f1a;
-  border-radius: 4px;
-  padding: 8px;
-  overflow-x: auto;
-}
-
-.tool-arguments pre {
-  margin: 0;
-  font-family: 'Monaco', 'Menlo', monospace;
-  font-size: 12px;
-  color: #a0a0c0;
-}
-</style>
+export default defineComponent({
+  components: { Badge }
+})
+</script>

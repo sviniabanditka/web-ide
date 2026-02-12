@@ -3,6 +3,8 @@ import { createPinia } from 'pinia'
 import { createRouter, createWebHistory } from 'vue-router'
 import App from './App.vue'
 
+import './assets/main.css'
+
 import LoginPage from './pages/LoginPage.vue'
 import ProjectsPage from './pages/ProjectsPage.vue'
 import WorkspacePage from './pages/WorkspacePage.vue'

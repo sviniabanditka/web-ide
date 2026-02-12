@@ -1,5 +1,5 @@
 <template>
-  <div class="terminal-workspace">
+  <div class="h-full flex flex-col">
     <TerminalList :project="project" />
   </div>
 </template>
@@ -17,11 +17,3 @@ defineProps<{
   project: Project
 }>()
 </script>
-
-<style scoped>
-.terminal-workspace {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-}
-</style>

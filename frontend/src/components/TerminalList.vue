@@ -1,37 +1,34 @@
 <template>
-  <div class="terminal-list">
-    <div class="tabs-bar">
-      <div class="tab-actions">
-        <button class="tab-btn" @click="createNewTerminal">
-          + Terminal
-        </button>
+  <div class="h-full flex flex-col">
+    <div class="flex items-center h-11 bg-card border-b">
+      <div class="px-2">
+        <Button size="sm" @click="createNewTerminal">+ Terminal</Button>
       </div>
-      <div class="terminal-tabs">
+      <div class="flex-1 flex overflow-x-auto">
         <div
           v-for="term in terminalsStore.terminals"
           :key="term.id"
-          class="terminal-tab"
-          :class="{ active: terminalsStore.currentTerminal?.id === term.id }"
+          class="flex items-center gap-2 px-4 py-2 text-sm cursor-pointer border-r border-background hover:bg-accent"
+          :class="{ 'bg-background border-t-2 border-t-primary': terminalsStore.currentTerminal?.id === term.id }"
           @click="selectTerminal(term)"
         >
-          <span class="tab-title">{{ term.title || 'Terminal' }}</span>
-          <button class="close-tab" @click.stop="closeTerminal(term.id)">×</button>
+          <span class="truncate">{{ term.title || 'Terminal' }}</span>
+          <button class="text-muted-foreground hover:text-foreground" @click.stop="closeTerminal(term.id)">×</button>
         </div>
       </div>
     </div>
 
-    <div class="content-area">
-      <template v-if="terminalsStore.currentTerminal">
-        <TerminalPane
-          :key="terminalsStore.currentTerminal.id"
-          :project-id="project.id"
-          :terminal-id="terminalsStore.currentTerminal.id"
-          :height="contentHeight"
-        />
-      </template>
-      <div v-else class="no-terminal">
-        <p>No terminal open</p>
-        <button @click="createNewTerminal" class="create-btn">Create Terminal</button>
+    <div class="flex-1 overflow-hidden">
+      <TerminalPane
+        v-if="terminalsStore.currentTerminal"
+        :key="terminalsStore.currentTerminal.id"
+        :project-id="project.id"
+        :terminal-id="terminalsStore.currentTerminal.id"
+        :height="contentHeight"
+      />
+      <div v-else class="h-full flex flex-col items-center justify-center text-muted-foreground">
+        <p class="mb-2">No terminal open</p>
+        <Button @click="createNewTerminal">Create Terminal</Button>
       </div>
     </div>
   </div>
@@ -41,6 +38,7 @@
 import { computed, onMounted, onUnmounted } from 'vue'
 import { useTerminalsStore } from '../stores/terminals'
 import TerminalPane from '../components/TerminalPane.vue'
+import Button from '@/components/ui/Button.vue'
 
 interface Project {
   id: string
@@ -90,104 +88,3 @@ onUnmounted(() => {
   terminalsStore.setCurrentTerminal(null)
 })
 </script>
-
-<style scoped>
-.terminal-list {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-}
-
-.tabs-bar {
-  display: flex;
-  align-items: center;
-  height: 44px;
-  background: #252526;
-  border-bottom: 1px solid #3c3c3c;
-}
-
-.tab-actions {
-  padding: 0 8px;
-}
-
-.tab-btn {
-  padding: 4px 12px;
-  background: #0e639c;
-  border: none;
-  border-radius: 4px;
-  color: #fff;
-  font-size: 12px;
-}
-
-.tab-btn:hover {
-  background: #1177bb;
-}
-
-.terminal-tabs {
-  display: flex;
-  flex: 1;
-  overflow-x: auto;
-}
-
-.terminal-tab {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 0 16px;
-  height: 44px;
-  background: #2d2d30;
-  border-right: 1px solid #1e1e1e;
-  cursor: pointer;
-  font-size: 13px;
-}
-
-.terminal-tab:hover {
-  background: #3c3c3c;
-}
-
-.terminal-tab.active {
-  background: #1e1e1e;
-  border-top: 2px solid #0e639c;
-}
-
-.close-tab {
-  background: none;
-  border: none;
-  color: #888;
-  font-size: 16px;
-  padding: 0;
-  line-height: 1;
-}
-
-.close-tab:hover {
-  color: #fff;
-}
-
-.content-area {
-  flex: 1;
-  overflow: hidden;
-}
-
-.no-terminal {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  color: #888;
-}
-
-.create-btn {
-  margin-top: 16px;
-  padding: 8px 16px;
-  background: #0e639c;
-  border: none;
-  border-radius: 4px;
-  color: #fff;
-  font-size: 14px;
-}
-
-.create-btn:hover {
-  background: #1177bb;
-}
-</style>

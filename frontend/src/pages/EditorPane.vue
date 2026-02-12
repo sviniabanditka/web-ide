@@ -1,47 +1,53 @@
 <template>
-  <div class="editor-pane">
-    <div class="editor-sidebar">
-      <div class="sidebar-header">Files</div>
-      <div class="file-tree">
+  <div class="h-full flex">
+    <aside class="w-[250px] bg-card border-r flex flex-col">
+      <div class="px-4 py-3 text-xs font-medium text-muted-foreground uppercase border-b">Files</div>
+      <ScrollArea class="flex-1">
         <FileTreeNode
           v-if="editorStore.fileTree"
           :node="editorStore.fileTree"
           :project-id="project.id"
           @select="handleSelect"
         />
-        <div v-else class="empty-state">Loading...</div>
-      </div>
-    </div>
+        <div v-else class="p-4 text-center text-muted-foreground text-sm">
+          Loading...
+        </div>
+      </ScrollArea>
+    </aside>
 
-    <div class="editor-main">
-      <div class="editor-tabs" v-if="editorStore.openFiles.length > 0">
+    <div class="flex-1 flex flex-col overflow-hidden">
+      <div v-if="editorStore.openFiles.length > 0" class="flex bg-secondary overflow-x-auto">
         <div
           v-for="file in editorStore.openFiles"
           :key="file.path"
-          class="editor-tab"
-          :class="{ active: editorStore.activeFile?.path === file.path }"
+          class="flex items-center gap-2 px-4 py-2 text-sm cursor-pointer border-r border-background hover:bg-accent"
+          :class="{ 'bg-background border-t-2 border-t-primary': editorStore.activeFile?.path === file.path }"
           @click="editorStore.setActiveFile(file.path)"
         >
-          <span class="tab-name">{{ file.name }}</span>
-          <button class="close-tab" @click.stop="closeFile(file.path)">×</button>
+          <span class="truncate max-w-[150px]">{{ file.name }}</span>
+          <button
+            class="text-muted-foreground hover:text-foreground"
+            @click.stop="closeFile(file.path)"
+          >
+            ×
+          </button>
         </div>
       </div>
 
-        <div class="editor-content">
-          <template v-if="editorStore.activeFile">
-            <MonacoEditor
-              :modelValue="editorStore.activeFile.content"
-              :language="editorStore.activeFile.language || 'plaintext'"
-              :path="editorStore.activeFile.path"
-              theme="vs-dark"
-              @update:modelValue="handleContentChange"
-              @save="handleSave"
-              class="monaco-editor"
-            />
-          </template>
-        <div v-else class="no-file">
-          <div class="no-file-content">
-            <h3>No file open</h3>
+      <div class="flex-1 overflow-hidden">
+        <MonacoEditor
+          v-if="editorStore.activeFile"
+          :modelValue="editorStore.activeFile.content"
+          :language="editorStore.activeFile.language || 'plaintext'"
+          :path="editorStore.activeFile.path"
+          theme="vs-dark"
+          @update:modelValue="handleContentChange"
+          @save="handleSave"
+          class="w-full h-full"
+        />
+        <div v-else class="h-full flex items-center justify-center bg-background">
+          <div class="text-center text-muted-foreground">
+            <h3 class="text-lg mb-2">No file open</h3>
             <p>Select a file from the tree to edit</p>
           </div>
         </div>
@@ -77,6 +83,7 @@ import { useEditorStore } from '../stores/editor'
 import FileTreeNode from '../components/FileTreeNode.vue'
 import ContextMenu from '../components/ContextMenu.vue'
 import FileOperationModal from '../components/FileOperationModal.vue'
+import ScrollArea from '@/components/ui/ScrollArea.vue'
 
 interface Project {
   id: string
@@ -103,7 +110,6 @@ const modalPath = ref('')
 const modalCurrentName = ref('')
 
 function handleContextMenu(event: MouseEvent, node: any) {
-  console.log('Context menu triggered:', { nodePath: node.path, nodeType: node.type, nodeName: node.name })
   contextMenuX.value = event.clientX
   contextMenuY.value = event.clientY
   contextMenuPath.value = node.path
@@ -111,7 +117,6 @@ function handleContextMenu(event: MouseEvent, node: any) {
   contextMenuVisible.value = true
 }
 
-// Provide context menu handler to all nested FileTreeNode components
 provide('onContextMenu', handleContextMenu)
 
 async function handleSelect(path: string) {
@@ -147,10 +152,7 @@ function closeFile(path: string) {
 async function handleContextAction(action: string, path: string, nodeType: 'file' | 'directory') {
   contextMenuVisible.value = false
 
-  // Нормализуем путь - убедимся что он полный (с ведущим /)
   const normalizedPath = path.startsWith('/') ? path : '/' + path
-  console.log('handleContextAction:', { action, originalPath: path, normalizedPath, nodeType })
-
   const type: 'file' | 'folder' = nodeType === 'directory' ? 'folder' : 'file'
 
   switch (action) {
@@ -192,136 +194,11 @@ async function handleContextAction(action: string, path: string, nodeType: 'file
 }
 
 async function handleModalSubmit(name: string, type: 'file' | 'folder') {
-  console.log('handleModalSubmit:', { mode: modalMode.value, type, name, path: modalPath.value })
   if (modalMode.value === 'create') {
-    const result = await editorStore.createFile(props.project.id, modalPath.value, name, type === 'folder')
-    console.log('createFile result:', result, 'error:', editorStore.error)
+    void await editorStore.createFile(props.project.id, modalPath.value, name, type === 'folder')
   } else {
     await editorStore.renameFile(props.project.id, modalPath.value, name)
   }
   modalVisible.value = false
 }
 </script>
-
-<style scoped>
-.editor-pane {
-  height: 100%;
-  display: flex;
-  background: #1e1e1e;
-}
-
-.editor-sidebar {
-  width: 250px;
-  background: #252526;
-  border-right: 1px solid #3c3c3c;
-  display: flex;
-  flex-direction: column;
-}
-
-.sidebar-header {
-  padding: 12px 16px;
-  font-size: 12px;
-  font-weight: 500;
-  color: #888;
-  text-transform: uppercase;
-  border-bottom: 1px solid #3c3c3c;
-}
-
-.file-tree {
-  flex: 1;
-  overflow-y: auto;
-  padding: 8px 0;
-}
-
-.empty-state {
-  padding: 16px;
-  color: #666;
-  font-size: 13px;
-  text-align: center;
-}
-
-.editor-main {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.editor-tabs {
-  display: flex;
-  background: #252526;
-  border-bottom: 1px solid #3c3c3c;
-  overflow-x: auto;
-}
-
-.editor-tab {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 16px;
-  background: #2d2d30;
-  border-right: 1px solid #1e1e1e;
-  cursor: pointer;
-  font-size: 13px;
-  color: #ccc;
-  white-space: nowrap;
-}
-
-.editor-tab:hover {
-  background: #3c3c3c;
-}
-
-.editor-tab.active {
-  background: #1e1e1e;
-  color: #fff;
-  border-top: 2px solid #0e639c;
-}
-
-.tab-name {
-  max-width: 150px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.close-tab {
-  background: none;
-  border: none;
-  color: #888;
-  font-size: 14px;
-  padding: 0;
-  line-height: 1;
-}
-
-.close-tab:hover {
-  color: #fff;
-}
-
-.editor-content {
-  flex: 1;
-  overflow: hidden;
-}
-
-.monaco-editor {
-  width: 100%;
-  height: 100%;
-}
-
-.no-file {
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: #1e1e1e;
-}
-
-.no-file-content {
-  text-align: center;
-  color: #666;
-}
-
-.no-file-content h3 {
-  font-size: 18px;
-  margin-bottom: 8px;
-  color: #888;
-}
-</style>

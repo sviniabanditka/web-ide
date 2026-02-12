@@ -1,16 +1,16 @@
 <template>
-  <div class="file-tree-node">
+  <div class="select-none">
     <div
-      class="node-row"
-      :class="{ active: isSelected }"
+      class="flex items-center gap-1.5 px-3 py-1 cursor-pointer text-sm text-muted-foreground hover:text-foreground hover:bg-accent"
+      :class="{ 'bg-accent text-foreground': isSelected }"
       @click="handleClick"
       @contextmenu.prevent="handleRightClick"
     >
-      <span class="node-icon">{{ node.type === 'directory' ? (isOpen ? '📂' : '📁') : '📄' }}</span>
-      <span class="node-name">{{ node.name }}</span>
+      <span class="text-base">{{ node.type === 'directory' ? (isOpen ? '📂' : '📁') : '📄' }}</span>
+      <span class="truncate">{{ node.name }}</span>
     </div>
 
-    <div v-if="node.type === 'directory' && isOpen" class="node-children">
+    <div v-if="node.type === 'directory' && isOpen" class="pl-3">
       <FileTreeNode
         v-for="child in node.children"
         :key="child.id"
@@ -68,43 +68,3 @@ function handleRightClick(event: MouseEvent) {
   }
 }
 </script>
-
-<style scoped>
-.file-tree-node {
-  user-select: none;
-}
-
-.node-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 12px 4px 24px;
-  cursor: pointer;
-  font-size: 13px;
-  color: #ccc;
-}
-
-.node-row:hover {
-  background: #2d2d30;
-}
-
-.node-row.active {
-  background: #37373d;
-  color: #fff;
-}
-
-.node-icon {
-  font-size: 14px;
-  flex-shrink: 0;
-}
-
-.node-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.node-children {
-  padding-left: 12px;
-}
-</style>

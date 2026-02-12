@@ -584,7 +584,7 @@ func (c *ChatWSClient) handleSendMessage(payload interface{}) {
 			toolMsg := &models.ChatMessage{
 				ID:              uuid.New(),
 				ChatID:          c.chatID,
-				Role:            "user",
+				Role:            "tool",
 				Content:         string(toolResultsJSON),
 				ToolResultsJSON: string(toolResultsJSON),
 				CreatedAt:       time.Now(),
@@ -595,8 +595,9 @@ func (c *ChatWSClient) handleSendMessage(payload interface{}) {
 
 			combinedContent := combineToolResults(toolResults)
 			messages = append(messages, provider.Message{
-				Role:    "user",
-				Content: combinedContent,
+				Role:       "tool",
+				Content:    combinedContent,
+				ToolCallID: "",
 			})
 		}
 

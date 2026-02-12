@@ -14,16 +14,11 @@
 html, body, #app {
   height: 100%;
   width: 100%;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
 body {
-  background: #1e1e1e;
-  color: #d4d4d4;
-}
-
-button {
-  cursor: pointer;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
 }
 
 input, textarea {
@@ -36,15 +31,15 @@ input, textarea {
 }
 
 ::-webkit-scrollbar-track {
-  background: #1e1e1e;
+  background: hsl(var(--muted));
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #424242;
+  background: hsl(var(--border));
   border-radius: 5px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #555;
+  background: hsl(var(--muted-foreground));
 }
 </style>

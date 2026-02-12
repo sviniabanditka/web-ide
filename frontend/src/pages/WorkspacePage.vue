@@ -1,56 +1,55 @@
 <template>
-  <div class="workspace-page">
-    <header class="header">
-      <div class="header-left">
-        <router-link to="/projects" class="back-btn">← Projects</router-link>
-        <span class="project-name">{{ project?.name }}</span>
+  <div class="h-screen flex flex-col bg-background">
+    <header class="flex items-center justify-between px-4 h-[52px] border-b bg-card">
+      <div class="flex items-center gap-4">
+        <router-link to="/projects" class="text-sm text-primary hover:underline">← Projects</router-link>
+        <span class="text-sm font-medium">{{ project?.name }}</span>
       </div>
-      <div class="header-right">
-        <button @click="handleLogout" class="logout-btn">Logout</button>
-      </div>
+      <Button variant="outline" size="sm" @click="handleLogout">Logout</Button>
     </header>
 
-    <div class="workspace-tabs">
-      <button
-        class="tab-btn"
-        :class="{ active: activeTab === 'editor' }"
+    <div class="flex bg-card border-b">
+      <Button
+        :variant="activeTab === 'editor' ? 'secondary' : 'ghost'"
         @click="activeTab = 'editor'"
+        class="rounded-none border-b-2 border-transparent data-[state=active]:border-primary"
       >
         Editor
-      </button>
-      <button
-        class="tab-btn"
-        :class="{ active: activeTab === 'terminal' }"
+      </Button>
+      <Button
+        :variant="activeTab === 'terminal' ? 'secondary' : 'ghost'"
         @click="activeTab = 'terminal'"
+        class="rounded-none border-b-2 border-transparent data-[state=active]:border-primary"
       >
         Terminal
-      </button>
-      <button
-        class="tab-btn"
-        :class="{ active: activeTab === 'ai' }"
+      </Button>
+      <Button
+        :variant="activeTab === 'ai' ? 'secondary' : 'ghost'"
         @click="activeTab = 'ai'"
+        class="rounded-none border-b-2 border-transparent data-[state=active]:border-primary"
       >
         AI
-      </button>
-      <button
-        class="tab-btn"
-        :class="{ active: activeTab === 'git' }"
+      </Button>
+      <Button
+        :variant="activeTab === 'git' ? 'secondary' : 'ghost'"
         @click="activeTab = 'git'"
+        class="rounded-none border-b-2 border-transparent data-[state=active]:border-primary"
       >
         Git
-      </button>
+      </Button>
     </div>
 
-    <div v-if="loading" class="loading">Loading...</div>
-    <div v-else-if="error" class="error">{{ error }}</div>
+    <div v-if="loading" class="flex items-center justify-center flex-1 text-muted-foreground">
+      Loading...
+    </div>
+    <div v-else-if="error" class="flex items-center justify-center flex-1 text-destructive">
+      {{ error }}
+    </div>
     <template v-else-if="project">
-      <div class="workspace-content">
+      <div class="flex-1 overflow-hidden">
         <EditorPane v-if="activeTab === 'editor'" :project="project" />
-        
         <TerminalWorkspace v-if="activeTab === 'terminal'" :project="project" />
-        
         <AIPane v-if="activeTab === 'ai'" :project="project" />
-        
         <GitPage v-if="activeTab === 'git'" />
       </div>
     </template>
@@ -58,7 +57,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
+import { ref, onMounted, onUnmounted, watch, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { useProjectsStore } from '../stores/projects'
@@ -69,6 +68,7 @@ import EditorPane from './EditorPane.vue'
 import TerminalWorkspace from './TerminalWorkspace.vue'
 import AIPane from './AIPane.vue'
 import GitPage from './GitPage.vue'
+import Button from '@/components/ui/Button.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -131,97 +131,3 @@ onMounted(async () => {
   }
 })
 </script>
-
-<style scoped>
-.workspace-page {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  background: #1e1e1e;
-}
-
-.header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0 16px;
-  height: 52px;
-  background: #252526;
-  border-bottom: 1px solid #3c3c3c;
-}
-
-.header-left {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-
-.back-btn {
-  color: #4fc3f7;
-  text-decoration: none;
-  font-size: 13px;
-}
-
-.back-btn:hover {
-  text-decoration: underline;
-}
-
-.project-name {
-  font-size: 14px;
-  font-weight: 500;
-}
-
-.logout-btn {
-  padding: 6px 12px;
-  background: transparent;
-  border: 1px solid #3c3c3c;
-  border-radius: 4px;
-  color: #ccc;
-  font-size: 12px;
-}
-
-.logout-btn:hover {
-  background: #3c3c3c;
-}
-
-.workspace-tabs {
-  display: flex;
-  background: #252526;
-  border-bottom: 1px solid #3c3c3c;
-}
-
-.tab-btn {
-  padding: 12px 24px;
-  background: none;
-  border: none;
-  border-bottom: 2px solid transparent;
-  color: #888;
-  font-size: 13px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.tab-btn:hover {
-  color: #ccc;
-}
-
-.tab-btn.active {
-  color: #fff;
-  border-bottom-color: #0e639c;
-}
-
-.workspace-content {
-  flex: 1;
-  overflow: hidden;
-}
-
-.loading, .error {
-  padding: 40px;
-  text-align: center;
-  color: #888;
-}
-
-.error {
-  color: #f44336;
-}
-</style>

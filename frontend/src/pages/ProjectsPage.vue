@@ -1,34 +1,40 @@
 <template>
-  <div class="projects-page">
-    <header class="header">
-      <h1>Projects</h1>
-      <button @click="handleLogout" class="logout-btn">Logout</button>
+  <div class="h-screen flex flex-col">
+    <header class="flex items-center justify-between px-6 py-3 border-b bg-card">
+      <h1 class="text-lg font-semibold">Projects</h1>
+      <Button variant="outline" size="sm" @click="handleLogout">Logout</Button>
     </header>
     
-    <div class="projects-content">
-      <div v-if="projectsStore.loading" class="loading">Loading...</div>
+    <main class="flex-1 overflow-auto p-6">
+      <div v-if="projectsStore.loading" class="flex items-center justify-center h-full text-muted-foreground">
+        Loading...
+      </div>
       
-      <div v-else-if="projectsStore.error" class="error">{{ projectsStore.error }}</div>
+      <div v-else-if="projectsStore.error" class="flex items-center justify-center h-full text-destructive">
+        {{ projectsStore.error }}
+      </div>
       
-      <div v-else-if="projectsStore.projects.length === 0" class="empty">
+      <div v-else-if="projectsStore.projects.length === 0" class="flex items-center justify-center h-full text-muted-foreground">
         No projects found. Add projects to {{ projectsDir }} directory.
       </div>
       
-      <div v-else class="projects-grid">
-        <div 
-          v-for="project in projectsStore.projects" 
-          :key="project.id" 
-          class="project-card"
+      <div v-else class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        <Card
+          v-for="project in projectsStore.projects"
+          :key="project.id"
+          class="cursor-pointer hover:border-primary transition-colors"
           @click="openProject(project.id)"
         >
-          <div class="project-icon">📁</div>
-          <div class="project-info">
-            <h3>{{ project.name }}</h3>
-            <p>{{ project.root_path }}</p>
-          </div>
-        </div>
+          <CardContent class="flex items-center gap-4 p-4">
+            <div class="text-3xl">📁</div>
+            <div class="flex-1 min-w-0">
+              <h3 class="font-medium truncate">{{ project.name }}</h3>
+              <p class="text-sm text-muted-foreground truncate">{{ project.root_path }}</p>
+            </div>
+          </CardContent>
+        </Card>
       </div>
-    </div>
+    </main>
   </div>
 </template>
 
@@ -37,6 +43,9 @@ import { onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { useProjectsStore } from '../stores/projects'
+import Button from '@/components/ui/Button.vue'
+import Card from '@/components/ui/Card.vue'
+import CardContent from '@/components/ui/Card.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -58,92 +67,3 @@ onMounted(async () => {
   await projectsStore.fetchProjects()
 })
 </script>
-
-<style scoped>
-.projects-page {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-}
-
-.header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 16px 24px;
-  background: #252526;
-  border-bottom: 1px solid #3c3c3c;
-}
-
-h1 {
-  font-size: 18px;
-  font-weight: 500;
-}
-
-.logout-btn {
-  padding: 8px 16px;
-  background: transparent;
-  border: 1px solid #3c3c3c;
-  border-radius: 4px;
-  color: #ccc;
-  font-size: 13px;
-}
-
-.logout-btn:hover {
-  background: #3c3c3c;
-}
-
-.projects-content {
-  flex: 1;
-  padding: 24px;
-  overflow: auto;
-}
-
-.loading, .error, .empty {
-  text-align: center;
-  padding: 40px;
-  color: #888;
-}
-
-.error {
-  color: #f44336;
-}
-
-.projects-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 16px;
-}
-
-.project-card {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 20px;
-  background: #252526;
-  border: 1px solid #3c3c3c;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.project-card:hover {
-  border-color: #0e639c;
-  background: #2d2d30;
-}
-
-.project-icon {
-  font-size: 32px;
-}
-
-.project-info h3 {
-  font-size: 16px;
-  font-weight: 500;
-  margin-bottom: 4px;
-}
-
-.project-info p {
-  font-size: 12px;
-  color: #888;
-}
-</style>

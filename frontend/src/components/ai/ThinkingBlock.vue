@@ -30,76 +30,14 @@ function toggle() {
 </script>
 
 <template>
-  <div class="thinking-block" :class="{ collapsed: isCollapsed }">
-    <div class="thinking-header" @click="toggle">
-      <span class="thinking-icon">💭</span>
-      <span class="thinking-label">Thinking</span>
-      <span class="thinking-toggle">{{ isCollapsed ? '▶' : '▼' }}</span>
+  <div class="thinking-block rounded-lg overflow-hidden border bg-card mt-2 mb-2" :class="{ 'border-muted': isCollapsed }">
+    <div class="flex items-center gap-2 px-3 py-2 bg-muted/30 cursor-pointer hover:bg-muted/50" @click="toggle">
+      <span class="text-sm">💭</span>
+      <span class="text-xs font-medium text-muted-foreground uppercase tracking-wide">Thinking</span>
+      <span class="ml-auto text-xs text-muted-foreground">{{ isCollapsed ? '▶' : '▼' }}</span>
     </div>
-    <div v-if="!isCollapsed" class="thinking-content">
-      <pre>{{ displayText }}</pre>
+    <div v-if="!isCollapsed" class="p-3 bg-muted/10 border-t">
+      <pre class="font-sans text-sm text-muted-foreground whitespace-pre-wrap break-words leading-relaxed">{{ displayText }}</pre>
     </div>
   </div>
 </template>
-
-<style scoped>
-.thinking-block {
-  background: #2a2a35;
-  border: 1px solid #3a3a4a;
-  border-radius: 8px;
-  margin: 8px 0;
-  overflow: hidden;
-}
-
-.thinking-block.collapsed {
-  border-color: #3a3a4a;
-}
-
-.thinking-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  background: #252530;
-  cursor: pointer;
-  user-select: none;
-}
-
-.thinking-header:hover {
-  background: #2d2d38;
-}
-
-.thinking-icon {
-  font-size: 14px;
-}
-
-.thinking-label {
-  font-size: 12px;
-  font-weight: 500;
-  color: #888;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.thinking-toggle {
-  font-size: 10px;
-  color: #666;
-  margin-left: auto;
-}
-
-.thinking-content {
-  padding: 12px;
-  background: #1e1e25;
-  border-top: 1px solid #3a3a4a;
-}
-
-.thinking-content pre {
-  margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  font-size: 13px;
-  color: #999;
-  white-space: pre-wrap;
-  word-break: break-word;
-  line-height: 1.6;
-}
-</style>
