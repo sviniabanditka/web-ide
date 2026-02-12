@@ -52,10 +52,26 @@ function initTerminal() {
     fontSize: 14,
     fontFamily: 'Menlo, Monaco, "Courier New", monospace',
     theme: {
-      background: '#1e1e1e',
-      foreground: '#d4d4d4',
-      cursor: '#d4d4d4',
-      selectionBackground: '#264f78'
+      background: '#0d1117',
+      foreground: '#c9d1d9',
+      cursor: '#c9d1d9',
+      selectionBackground: '#264f78',
+      black: '#484f58',
+      red: '#ff7b72',
+      green: '#3fb950',
+      yellow: '#d29922',
+      blue: '#58a6ff',
+      magenta: '#bc8cff',
+      cyan: '#39c5cf',
+      white: '#c9d1d9',
+      brightBlack: '#6e7681',
+      brightRed: '#ff7b72',
+      brightGreen: '#3fb950',
+      brightYellow: '#d29922',
+      brightBlue: '#58a6ff',
+      brightMagenta: '#bc8cff',
+      brightCyan: '#39c5cf',
+      brightWhite: '#ffffff'
     },
     convertEol: true
   })
@@ -139,7 +155,7 @@ watch(() => props.height, () => {
 <style scoped>
 .terminal-pane {
   width: 100%;
-  background: #1e1e1e;
+  background: #0d1117;
   overflow: hidden;
 }
 

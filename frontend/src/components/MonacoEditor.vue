@@ -132,7 +132,15 @@ onUnmounted(() => {
 }
 
 :deep(.monaco-editor .line-numbers) {
-  color: #6e7681 !important;
+  color: #6e7681;
+}
+
+:deep(.monaco-editor) {
+  background-color: #0d1117;
+}
+
+:deep(.monaco-editor-background) {
+  background-color: #0d1117;
 }
 
 :deep(.monaco-editor .current-line-line-number) {
