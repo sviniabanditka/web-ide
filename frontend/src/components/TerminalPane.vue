@@ -10,6 +10,7 @@ import { Terminal } from 'xterm'
 import { FitAddon } from 'xterm-addon-fit'
 import { useDebounceFn } from '@vueuse/core'
 import { useTerminalsStore } from '../stores/terminals'
+import { useSettingsStore } from '@/stores/settings'
 
 const props = defineProps<{
   projectId: string
@@ -22,6 +23,7 @@ const emit = defineEmits<{
 }>()
 
 const terminalsStore = useTerminalsStore()
+const settingsStore = useSettingsStore()
 const terminalRef = ref<HTMLElement | null>(null)
 let terminal: Terminal | null = null
 let fitAddon: FitAddon | null = null
@@ -37,6 +39,11 @@ const handleResize = useDebounceFn(() => {
   }
 }, 100)
 
+function getTerminalTheme() {
+  const themeId = settingsStore.settings?.terminal_theme_id || 'github-dark'
+  return settingsStore.getTerminalThemeColors(themeId)
+}
+
 function initTerminal() {
   console.log('[TERM] initTerminal:', props.terminalId)
   if (!terminalRef.value) {
@@ -46,15 +53,17 @@ function initTerminal() {
 
   console.log('[TERM] creating xterm for:', props.terminalId)
 
+  const theme = getTerminalTheme()
+
   terminal = new Terminal({
     cursorBlink: true,
     cursorStyle: 'block',
     fontSize: 14,
     fontFamily: 'Menlo, Monaco, "Courier New", monospace',
     theme: {
-      background: '#0d1117',
-      foreground: '#c9d1d9',
-      cursor: '#c9d1d9',
+      background: theme.background,
+      foreground: theme.foreground,
+      cursor: theme.foreground,
       selectionBackground: '#264f78',
       black: '#484f58',
       red: '#ff7b72',
@@ -63,7 +72,7 @@ function initTerminal() {
       blue: '#58a6ff',
       magenta: '#bc8cff',
       cyan: '#39c5cf',
-      white: '#c9d1d9',
+      white: theme.foreground,
       brightBlack: '#6e7681',
       brightRed: '#ff7b72',
       brightGreen: '#3fb950',
@@ -122,6 +131,17 @@ function cleanup() {
   }
 }
 
+function refreshTerminal() {
+  cleanup()
+  setTimeout(() => {
+    nextTick(() => {
+      if (props.terminalId) {
+        initTerminal()
+      }
+    })
+  }, 50)
+}
+
 onMounted(() => {
   nextTick(() => {
     initTerminal()
@@ -132,17 +152,8 @@ onUnmounted(() => {
   cleanup()
 })
 
-watch(() => props.terminalId, (newId, oldId) => {
-  if (newId !== oldId) {
-    cleanup()
-    setTimeout(() => {
-      nextTick(() => {
-        if (props.terminalId) {
-          initTerminal()
-        }
-      })
-    }, 50)
-  }
+watch(() => props.terminalId, () => {
+  refreshTerminal()
 })
 
 watch(() => props.height, () => {
@@ -150,12 +161,17 @@ watch(() => props.height, () => {
     fitAddon?.fit()
   })
 })
+
+watch(() => settingsStore.settings?.terminal_theme_id, () => {
+  if (props.terminalId) {
+    refreshTerminal()
+  }
+})
 </script>
 
 <style scoped>
 .terminal-pane {
   width: 100%;
-  background: #0d1117;
   overflow: hidden;
 }
 

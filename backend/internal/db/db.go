@@ -187,6 +187,23 @@ func runMigrations() error {
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_chat_changesets_chat ON chat_changesets(chat_id)`,
+
+		`CREATE TABLE IF NOT EXISTS user_settings (
+			id TEXT PRIMARY KEY,
+			user_id TEXT NOT NULL UNIQUE,
+			ai_provider TEXT NOT NULL DEFAULT 'anthropic',
+			ai_base_url TEXT NOT NULL DEFAULT '',
+			ai_api_key TEXT NOT NULL DEFAULT '',
+			ai_model TEXT NOT NULL DEFAULT 'claude-sonnet-4-20250514',
+			ui_theme_id TEXT NOT NULL DEFAULT 'dark-plus',
+			editor_theme_id TEXT NOT NULL DEFAULT 'vs-dark',
+			terminal_theme_id TEXT NOT NULL DEFAULT 'monokai',
+			custom_theme_json TEXT NOT NULL DEFAULT '{}',
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (user_id) REFERENCES users(id)
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_user_settings_user ON user_settings(user_id)`,
 	}
 
 	for _, m := range migrations {
@@ -204,24 +221,35 @@ func runMigrations() error {
 
 func addMissingColumns() error {
 	columns := []struct {
-		name string
-		typ  string
+		table string
+		name  string
+		typ   string
+		def   string
 	}{
-		{"tool_calls_json", "TEXT"},
-		{"tool_results_json", "TEXT"},
-		{"thinking", "TEXT"},
-		{"tool_call_id", "TEXT"},
+		{"chat_messages", "tool_calls_json", "TEXT", ""},
+		{"chat_messages", "tool_results_json", "TEXT", ""},
+		{"chat_messages", "thinking", "TEXT", ""},
+		{"chat_messages", "tool_call_id", "TEXT", ""},
+		{"user_settings", "ui_theme_id", "TEXT", "'dark-plus'"},
+		{"user_settings", "editor_theme_id", "TEXT", "'vs-dark'"},
+		{"user_settings", "terminal_theme_id", "TEXT", "'monokai'"},
 	}
 
 	for _, col := range columns {
-		query := fmt.Sprintf("ALTER TABLE chat_messages ADD COLUMN %s %s", col.name, col.typ)
+		var query string
+		if col.def != "" {
+			query = fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s DEFAULT %s", col.table, col.name, col.typ, col.def)
+		} else {
+			query = fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s", col.table, col.name, col.typ)
+		}
 		if _, err := db.Exec(query); err != nil {
 			if strings.Contains(err.Error(), "duplicate column name") {
 				continue
 			}
-			return fmt.Errorf("failed to add column %s: %w", col.name, err)
+			log.Printf("Warning: failed to add column %s.%s: %v", col.table, col.name, err)
+		} else {
+			log.Printf("Added column: %s.%s", col.table, col.name)
 		}
-		log.Printf("Added column: %s", col.name)
 	}
 
 	return nil

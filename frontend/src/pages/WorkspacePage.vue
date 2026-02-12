@@ -47,6 +47,17 @@
 
       <div class="flex-1"></div>
 
+      <Tooltip text="Settings" position="right">
+        <Button
+          variant="ghost"
+          size="icon"
+          @click="showSettings = true"
+          class="w-10 h-10"
+        >
+          <SettingsIcon class="w-5 h-5" />
+        </Button>
+      </Tooltip>
+
       <Tooltip text="Projects" position="right">
         <Button
           variant="ghost"
@@ -92,6 +103,8 @@
         </div>
       </template>
     </div>
+
+    <SettingsModal v-model:open="showSettings" />
   </div>
 </template>
 
@@ -102,14 +115,16 @@ import { useAuthStore } from '../stores/auth'
 import { useProjectsStore } from '../stores/projects'
 import { useEditorStore } from '../stores/editor'
 import { useTerminalsStore } from '../stores/terminals'
+import { useSettingsStore } from '../stores/settings'
 import { api } from '../api'
 import EditorPane from './EditorPane.vue'
 import TerminalWorkspace from './TerminalWorkspace.vue'
 import AIPane from './AIPane.vue'
 import GitPage from './GitPage.vue'
+import SettingsModal from '@/components/SettingsModal.vue'
 import Button from '@/components/ui/Button.vue'
 import Tooltip from '@/components/ui/Tooltip.vue'
-import { FileCode, Terminal, Bot, GitBranch, LogOut, Folder } from 'lucide-vue-next'
+import { FileCode, Terminal, Bot, GitBranch, LogOut, Folder, Settings } from 'lucide-vue-next'
 
 const FileCodeIcon = FileCode
 const TerminalIcon = Terminal
@@ -117,6 +132,7 @@ const BotIcon = Bot
 const GitBranchIcon = GitBranch
 const LogOutIcon = LogOut
 const FolderIcon = Folder
+const SettingsIcon = Settings
 
 const route = useRoute()
 const router = useRouter()
@@ -124,11 +140,13 @@ const authStore = useAuthStore()
 const projectsStore = useProjectsStore()
 const editorStore = useEditorStore()
 const terminalsStore = useTerminalsStore()
+const settingsStore = useSettingsStore()
 
 const project = computed(() => projectsStore.currentProject)
 const activeTab = ref('terminal')
 const loading = ref(true)
 const error = ref<string | null>(null)
+const showSettings = ref(false)
 
 async function handleLogout() {
   await authStore.logout()
@@ -170,6 +188,7 @@ onMounted(async () => {
     router.push('/projects')
   } else {
     try {
+      await settingsStore.fetchSettings()
       const savedTab = await editorStore.loadWorkspaceState(projectId)
       if (savedTab) {
         activeTab.value = savedTab

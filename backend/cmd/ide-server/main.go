@@ -93,6 +93,17 @@ func setupRoutes(app *fiber.App, cfg *config.Config) {
 		return c.JSON(fiber.Map{"status": "ok"})
 	})
 
+	settingsGroup := protected.Group("/settings")
+	settingsGroup.Get("", func(c *fiber.Ctx) error {
+		return handlers.GetSettings(c)
+	})
+	settingsGroup.Put("", func(c *fiber.Ctx) error {
+		return handlers.SaveSettings(c)
+	})
+	settingsGroup.Get("/themes", func(c *fiber.Ctx) error {
+		return handlers.GetThemes(c)
+	})
+
 	projectsGroup := protected.Group("/projects")
 	projectsGroup.Get("", func(c *fiber.Ctx) error {
 		return handlers.ListProjects(c, cfg.ProjectsDir)

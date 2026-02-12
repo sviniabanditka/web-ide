@@ -5,12 +5,12 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, watch, shallowRef } from 'vue'
 import * as monaco from 'monaco-editor'
-
 import editorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker'
 import jsonWorker from 'monaco-editor/esm/vs/language/json/json.worker?worker'
 import cssWorker from 'monaco-editor/esm/vs/language/css/css.worker?worker'
 import htmlWorker from 'monaco-editor/esm/vs/language/html/html.worker?worker'
 import tsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker'
+import { useSettingsStore } from '@/stores/settings'
 
 self.MonacoEnvironment = {
   getWorker: function (_workerId: string, label: string): Worker {
@@ -38,7 +38,6 @@ const props = defineProps<{
   modelValue?: string
   language: string
   path?: string
-  theme?: string
 }>()
 
 const emit = defineEmits<{
@@ -46,8 +45,16 @@ const emit = defineEmits<{
   (e: 'save'): void
 }>()
 
+const settingsStore = useSettingsStore()
 const editorContainer = ref<HTMLElement | null>(null)
 const editor = shallowRef<monaco.editor.IStandaloneCodeEditor | null>(null)
+
+function getCurrentTheme(): string {
+  if (settingsStore.settings?.editor_theme_id) {
+    return settingsStore.settings.editor_theme_id
+  }
+  return 'vs-dark'
+}
 
 onMounted(() => {
   if (!editorContainer.value) return
@@ -55,7 +62,7 @@ onMounted(() => {
   const options: monaco.editor.IStandaloneEditorConstructionOptions = {
     value: props.modelValue || '',
     language: props.language,
-    theme: props.theme || 'vs-dark',
+    theme: getCurrentTheme(),
     automaticLayout: true,
     minimap: { enabled: true },
     fontSize: 14,
@@ -105,6 +112,12 @@ watch(() => props.language, (newLang) => {
   }
 })
 
+watch(() => settingsStore.settings?.editor_theme_id, (newTheme) => {
+  if (editor.value && newTheme) {
+    monaco.editor.setTheme(newTheme)
+  }
+})
+
 onUnmounted(() => {
   if (editor.value) {
     editor.value.dispose()
@@ -116,47 +129,5 @@ onUnmounted(() => {
 .monaco-container {
   width: 100%;
   height: 100%;
-}
-
-:deep(.monaco-editor .current-line) {
-  border: none !important;
-  background-color: rgba(255, 255, 255, 0.03) !important;
-}
-
-:deep(.monaco-editor .selected-text) {
-  background-color: rgba(55, 148, 255, 0.3) !important;
-}
-
-:deep(.monaco-editor .margin) {
-  background-color: transparent !important;
-}
-
-:deep(.monaco-editor .line-numbers) {
-  color: #6e7681;
-}
-
-:deep(.monaco-editor) {
-  background-color: #0d1117;
-}
-
-:deep(.monaco-editor-background) {
-  background-color: #0d1117;
-}
-
-:deep(.monaco-editor .current-line-line-number) {
-  color: #e6edf3 !important;
-  font-weight: 600 !important;
-}
-
-:deep(.monaco-editor .view-overlays .current-line) {
-  border: none !important;
-}
-
-:deep(.monaco-editor.focused) {
-  outline: none !important;
-}
-
-:deep(.monaco-editor .focused .selected-text) {
-  background-color: rgba(55, 148, 255, 0.4) !important;
 }
 </style>

@@ -17,8 +17,8 @@ html, body, #app {
 }
 
 body {
-  background: hsl(var(--background));
-  color: hsl(var(--foreground));
+  background: var(--background);
+  color: var(--foreground);
 }
 
 input, textarea {
@@ -31,15 +31,15 @@ input, textarea {
 }
 
 ::-webkit-scrollbar-track {
-  background: hsl(var(--muted));
+  background: var(--muted);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: hsl(var(--border));
+  background: var(--border);
   border-radius: 5px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: hsl(var(--muted-foreground));
+  background: var(--muted-foreground);
 }
 </style>

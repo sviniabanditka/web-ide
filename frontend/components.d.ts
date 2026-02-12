@@ -11,6 +11,8 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
+    AIAgentSettings: typeof import('./src/components/settings/AIAgentSettings.vue')['default']
+    AppearanceSettings: typeof import('./src/components/settings/AppearanceSettings.vue')['default']
     Avatar: typeof import('./src/components/ui/Avatar.vue')['default']
     Badge: typeof import('./src/components/ui/Badge.vue')['default']
     Button: typeof import('./src/components/ui/Button.vue')['default']
@@ -30,6 +32,7 @@ declare module 'vue' {
     DropdownMenu: typeof import('./src/components/ui/DropdownMenu.vue')['default']
     DropdownMenuItem: typeof import('./src/components/ui/DropdownMenuItem.vue')['default']
     DropdownMenuSeparator: typeof import('./src/components/ui/DropdownMenuSeparator.vue')['default']
+    EditorSettings: typeof import('./src/components/settings/EditorSettings.vue')['default']
     FileOperationModal: typeof import('./src/components/FileOperationModal.vue')['default']
     FileTreeNode: typeof import('./src/components/FileTreeNode.vue')['default']
     Input: typeof import('./src/components/ui/Input.vue')['default']
@@ -41,6 +44,7 @@ declare module 'vue' {
     ScrollArea: typeof import('./src/components/ui/ScrollArea.vue')['default']
     Select: typeof import('./src/components/ui/Select.vue')['default']
     Separator: typeof import('./src/components/ui/Separator.vue')['default']
+    SettingsModal: typeof import('./src/components/SettingsModal.vue')['default']
     Skeleton: typeof import('./src/components/ui/Skeleton.vue')['default']
     Table: typeof import('./src/components/ui/Table.vue')['default']
     TableBody: typeof import('./src/components/ui/TableBody.vue')['default']
@@ -52,6 +56,7 @@ declare module 'vue' {
     TabsContent: typeof import('./src/components/ui/TabsContent.vue')['default']
     TabsTrigger: typeof import('./src/components/ui/TabsTrigger.vue')['default']
     TerminalPane: typeof import('./src/components/TerminalPane.vue')['default']
+    TerminalSettings: typeof import('./src/components/settings/TerminalSettings.vue')['default']
     Textarea: typeof import('./src/components/ui/Textarea.vue')['default']
     ThinkingBlock: typeof import('./src/components/ai/ThinkingBlock.vue')['default']
     ToolApprovalCard: typeof import('./src/components/ai/ToolApprovalCard.vue')['default']
