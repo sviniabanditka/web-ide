@@ -1,6 +1,30 @@
 <template>
   <div class="h-full flex">
-    <aside class="w-[250px] bg-card border-r flex flex-col">
+    <aside class="w-[280px] bg-card border-r flex flex-col">
+      <div v-if="editorStore.openFiles.length > 0" class="flex flex-col border-b bg-secondary/50">
+        <div class="px-3 py-2 text-xs font-medium text-muted-foreground uppercase">Open Editors</div>
+        <div class="flex flex-col">
+          <div
+            v-for="file in editorStore.openFiles"
+            :key="file.path"
+            class="group flex items-center gap-2 px-3 py-1.5 text-sm cursor-pointer border-l-2 border-transparent hover:bg-accent/50"
+            :class="{ 'bg-accent border-l-primary': editorStore.activeFile?.path === file.path }"
+            @click="editorStore.setActiveFile(file.path)"
+          >
+            <span class="truncate flex-1">{{ file.name }}</span>
+            <button
+              class="text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 p-0.5 rounded"
+              @click.stop="closeFile(file.path)"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M18 6 6 18"/>
+                <path d="m6 6 12 12"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+
       <div class="px-4 py-3 text-xs font-medium text-muted-foreground uppercase border-b">Files</div>
       <ScrollArea class="flex-1">
         <FileTreeNode
@@ -16,24 +40,6 @@
     </aside>
 
     <div class="flex-1 flex flex-col overflow-hidden">
-      <div v-if="editorStore.openFiles.length > 0" class="flex bg-secondary overflow-x-auto">
-        <div
-          v-for="file in editorStore.openFiles"
-          :key="file.path"
-          class="flex items-center gap-2 px-4 py-2 text-sm cursor-pointer border-r border-background hover:bg-accent"
-          :class="{ 'bg-background border-t-2 border-t-primary': editorStore.activeFile?.path === file.path }"
-          @click="editorStore.setActiveFile(file.path)"
-        >
-          <span class="truncate max-w-[150px]">{{ file.name }}</span>
-          <button
-            class="text-muted-foreground hover:text-foreground"
-            @click.stop="closeFile(file.path)"
-          >
-            ×
-          </button>
-        </div>
-      </div>
-
       <div class="flex-1 overflow-hidden">
         <MonacoEditor
           v-if="editorStore.activeFile"

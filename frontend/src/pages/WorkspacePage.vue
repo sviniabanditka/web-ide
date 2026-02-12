@@ -1,58 +1,97 @@
 <template>
-  <div class="h-screen flex flex-col bg-background">
-    <header class="flex items-center justify-between px-4 h-[52px] border-b bg-card">
-      <div class="flex items-center gap-4">
-        <router-link to="/projects" class="text-sm text-primary hover:underline">← Projects</router-link>
-        <span class="text-sm font-medium">{{ project?.name }}</span>
-      </div>
-      <Button variant="outline" size="sm" @click="handleLogout">Logout</Button>
-    </header>
+  <div class="h-screen flex bg-background">
+    <aside class="w-[52px] bg-card border-r flex flex-col items-center py-2 gap-1">
+      <Tooltip text="Editor" position="right">
+        <Button
+          :variant="activeTab === 'editor' ? 'secondary' : 'ghost'"
+          size="icon"
+          @click="activeTab = 'editor'"
+          class="w-10 h-10"
+        >
+          <FileCodeIcon class="w-5 h-5" />
+        </Button>
+      </Tooltip>
 
-    <div class="flex bg-card border-b">
-      <Button
-        :variant="activeTab === 'editor' ? 'secondary' : 'ghost'"
-        @click="activeTab = 'editor'"
-        class="rounded-none border-b-2 border-transparent data-[state=active]:border-primary"
-      >
-        Editor
-      </Button>
-      <Button
-        :variant="activeTab === 'terminal' ? 'secondary' : 'ghost'"
-        @click="activeTab = 'terminal'"
-        class="rounded-none border-b-2 border-transparent data-[state=active]:border-primary"
-      >
-        Terminal
-      </Button>
-      <Button
-        :variant="activeTab === 'ai' ? 'secondary' : 'ghost'"
-        @click="activeTab = 'ai'"
-        class="rounded-none border-b-2 border-transparent data-[state=active]:border-primary"
-      >
-        AI
-      </Button>
-      <Button
-        :variant="activeTab === 'git' ? 'secondary' : 'ghost'"
-        @click="activeTab = 'git'"
-        class="rounded-none border-b-2 border-transparent data-[state=active]:border-primary"
-      >
-        Git
-      </Button>
-    </div>
+      <Tooltip text="Terminal" position="right">
+        <Button
+          :variant="activeTab === 'terminal' ? 'secondary' : 'ghost'"
+          size="icon"
+          @click="activeTab = 'terminal'"
+          class="w-10 h-10"
+        >
+          <TerminalIcon class="w-5 h-5" />
+        </Button>
+      </Tooltip>
 
-    <div v-if="loading" class="flex items-center justify-center flex-1 text-muted-foreground">
-      Loading...
-    </div>
-    <div v-else-if="error" class="flex items-center justify-center flex-1 text-destructive">
-      {{ error }}
-    </div>
-    <template v-else-if="project">
-      <div class="flex-1 overflow-hidden">
-        <EditorPane v-if="activeTab === 'editor'" :project="project" />
-        <TerminalWorkspace v-if="activeTab === 'terminal'" :project="project" />
-        <AIPane v-if="activeTab === 'ai'" :project="project" />
-        <GitPage v-if="activeTab === 'git'" />
+      <Tooltip text="AI" position="right">
+        <Button
+          :variant="activeTab === 'ai' ? 'secondary' : 'ghost'"
+          size="icon"
+          @click="activeTab = 'ai'"
+          class="w-10 h-10"
+        >
+          <BotIcon class="w-5 h-5" />
+        </Button>
+      </Tooltip>
+
+      <Tooltip text="Git" position="right">
+        <Button
+          :variant="activeTab === 'git' ? 'secondary' : 'ghost'"
+          size="icon"
+          @click="activeTab = 'git'"
+          class="w-10 h-10"
+        >
+          <GitBranchIcon class="w-5 h-5" />
+        </Button>
+      </Tooltip>
+
+      <div class="flex-1"></div>
+
+      <Tooltip text="Projects" position="right">
+        <Button
+          variant="ghost"
+          size="icon"
+          @click="goToProjects"
+          class="w-10 h-10"
+        >
+          <FolderIcon class="w-5 h-5" />
+        </Button>
+      </Tooltip>
+
+      <Tooltip text="Logout" position="right">
+        <Button
+          variant="ghost"
+          size="icon"
+          @click="handleLogout"
+          class="w-10 h-10"
+        >
+          <LogOutIcon class="w-5 h-5" />
+        </Button>
+      </Tooltip>
+    </aside>
+
+    <div class="flex-1 flex flex-col overflow-hidden">
+      <header class="flex items-center justify-between px-4 h-[52px] border-b bg-card">
+        <div class="flex items-center gap-2">
+          <span class="text-sm font-medium">{{ project?.name }}</span>
+        </div>
+      </header>
+
+      <div v-if="loading" class="flex items-center justify-center flex-1 text-muted-foreground">
+        Loading...
       </div>
-    </template>
+      <div v-else-if="error" class="flex items-center justify-center flex-1 text-destructive">
+        {{ error }}
+      </div>
+      <template v-else-if="project">
+        <div class="flex-1 overflow-hidden">
+          <EditorPane v-if="activeTab === 'editor'" :project="project" />
+          <TerminalWorkspace v-if="activeTab === 'terminal'" :project="project" />
+          <AIPane v-if="activeTab === 'ai'" :project="project" />
+          <GitPage v-if="activeTab === 'git'" />
+        </div>
+      </template>
+    </div>
   </div>
 </template>
 
@@ -69,6 +108,15 @@ import TerminalWorkspace from './TerminalWorkspace.vue'
 import AIPane from './AIPane.vue'
 import GitPage from './GitPage.vue'
 import Button from '@/components/ui/Button.vue'
+import Tooltip from '@/components/ui/Tooltip.vue'
+import { FileCode, Terminal, Bot, GitBranch, LogOut, Folder } from 'lucide-vue-next'
+
+const FileCodeIcon = FileCode
+const TerminalIcon = Terminal
+const BotIcon = Bot
+const GitBranchIcon = GitBranch
+const LogOutIcon = LogOut
+const FolderIcon = Folder
 
 const route = useRoute()
 const router = useRouter()
@@ -85,6 +133,10 @@ const error = ref<string | null>(null)
 async function handleLogout() {
   await authStore.logout()
   router.push('/login')
+}
+
+function goToProjects() {
+  router.push('/projects')
 }
 
 async function saveActiveTab() {

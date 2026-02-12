@@ -1,31 +1,40 @@
 <template>
   <div class="h-full flex">
     <aside class="w-[220px] bg-card border-r flex flex-col">
-      <div class="p-3 border-b">
-        <Button class="w-full" @click="createNewChat">New Chat</Button>
+      <div class="px-3 py-2 border-b">
+        <Button size="sm" @click="createNewChat" class="w-full">
+          <PlusIcon class="w-4 h-4 mr-2" />
+          New Chat
+        </Button>
       </div>
-      <ScrollArea class="flex-1">
-        <div v-if="aiStore.chats.length === 0" class="p-5 text-center text-sm text-muted-foreground">
+      <div class="flex-1 overflow-y-auto">
+        <div v-if="aiStore.chats.length === 0" class="p-4 text-center text-sm text-muted-foreground">
           No chats yet
         </div>
         <div
           v-for="chat in aiStore.chats"
           :key="chat.id"
-          class="flex items-center justify-between px-3 py-2.5 cursor-pointer hover:bg-accent rounded-sm mx-2 mt-1"
-          :class="{ 'bg-accent': aiStore.activeChat?.id === chat.id }"
+          class="group flex items-center gap-2 px-3 py-1.5 text-sm cursor-pointer border-l-2 border-transparent hover:bg-accent/50"
+          :class="{ 'bg-accent border-l-primary': aiStore.activeChat?.id === chat.id }"
           @click="selectChat(chat)"
         >
-          <span class="text-sm truncate">{{ chat.title || 'Untitled' }}</span>
-          <button class="text-muted-foreground hover:text-destructive" @click.stop="deleteChat(chat.id)">×</button>
+          <BotIcon class="w-4 h-4 text-muted-foreground shrink-0" />
+          <span class="truncate flex-1">{{ chat.title || 'Untitled' }}</span>
+          <button
+            class="text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 p-0.5 rounded"
+            @click.stop="deleteChat(chat.id)"
+          >
+            <XIcon class="w-3 h-3" />
+          </button>
         </div>
-      </ScrollArea>
+      </div>
     </aside>
 
     <div class="flex-1 flex flex-col overflow-hidden" v-if="aiStore.activeChat">
       <div class="flex-shrink-0 px-4 py-3 border-b">
         <h3 class="font-medium">{{ aiStore.activeChat.title }}</h3>
       </div>
-      <ScrollArea class="flex-1">
+      <div class="flex-1 overflow-y-auto">
         <div class="p-4 space-y-4">
           <template v-for="msg in sortedMessages" :key="msg.id">
             <div v-if="msg.role === 'thinking' && msg.content" class="thinking-message">
@@ -81,7 +90,7 @@
             </div>
           </template>
         </div>
-      </ScrollArea>
+      </div>
       <div class="flex-shrink-0 p-4 border-t bg-card space-y-2">
         <Textarea
           v-model="userMessage"
@@ -122,7 +131,7 @@
       <div class="px-4 py-3 border-b">
         <h4 class="font-medium text-sm">Changes</h4>
       </div>
-      <ScrollArea class="flex-1">
+      <div class="flex-1 overflow-y-auto">
         <div
           v-for="cs in chatChangeSets"
           :key="cs.id"
@@ -138,7 +147,7 @@
         <div v-if="chatChangeSets.length === 0" class="p-5 text-center text-sm text-muted-foreground">
           No changes yet
         </div>
-      </ScrollArea>
+      </div>
     </aside>
   </div>
 </template>
@@ -151,8 +160,8 @@ import ToolBlock from '../components/ai/ToolBlock.vue'
 import ThinkingBlock from '../components/ai/ThinkingBlock.vue'
 import Button from '@/components/ui/Button.vue'
 import Textarea from '@/components/ui/Textarea.vue'
-import ScrollArea from '@/components/ui/ScrollArea.vue'
 import Badge from '@/components/ui/Badge.vue'
+import { Bot, Plus, X } from 'lucide-vue-next'
 
 interface Project {
   id: string
@@ -167,6 +176,10 @@ const props = defineProps<{
 const aiStore = useAIStore()
 const userMessage = ref('')
 const chatChangeSets = ref<ChatChangeSet[]>([])
+
+const BotIcon = Bot
+const PlusIcon = Plus
+const XIcon = X
 
 const sortedMessages = computed(() => {
   return [...aiStore.chatMessages]

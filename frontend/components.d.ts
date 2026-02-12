@@ -15,6 +15,11 @@ declare module 'vue' {
     Badge: typeof import('./src/components/ui/Badge.vue')['default']
     Button: typeof import('./src/components/ui/Button.vue')['default']
     Card: typeof import('./src/components/ui/Card.vue')['default']
+    CardContent: typeof import('./src/components/ui/CardContent.vue')['default']
+    CardDescription: typeof import('./src/components/ui/CardDescription.vue')['default']
+    CardFooter: typeof import('./src/components/ui/CardFooter.vue')['default']
+    CardHeader: typeof import('./src/components/ui/CardHeader.vue')['default']
+    CardTitle: typeof import('./src/components/ui/CardTitle.vue')['default']
     Checkbox: typeof import('./src/components/ui/Checkbox.vue')['default']
     ContextMenu: typeof import('./src/components/ContextMenu.vue')['default']
     Dialog: typeof import('./src/components/ui/Dialog.vue')['default']
@@ -46,7 +51,6 @@ declare module 'vue' {
     Tabs: typeof import('./src/components/ui/Tabs.vue')['default']
     TabsContent: typeof import('./src/components/ui/TabsContent.vue')['default']
     TabsTrigger: typeof import('./src/components/ui/TabsTrigger.vue')['default']
-    TerminalList: typeof import('./src/components/TerminalList.vue')['default']
     TerminalPane: typeof import('./src/components/TerminalPane.vue')['default']
     Textarea: typeof import('./src/components/ui/Textarea.vue')['default']
     ThinkingBlock: typeof import('./src/components/ai/ThinkingBlock.vue')['default']
@@ -54,6 +58,7 @@ declare module 'vue' {
     ToolBlock: typeof import('./src/components/ai/ToolBlock.vue')['default']
     ToolCallCard: typeof import('./src/components/ai/ToolCallCard.vue')['default']
     ToolResultCard: typeof import('./src/components/ai/ToolResultCard.vue')['default']
+    Tooltip: typeof import('./src/components/ui/Tooltip.vue')['default']
     UsageRing: typeof import('./src/components/UsageRing.vue')['default']
   }
 }

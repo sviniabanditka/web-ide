@@ -63,7 +63,9 @@ onMounted(() => {
     scrollBeyondLastLine: false,
     renderWhitespace: 'selection',
     tabSize: 2,
-    wordWrap: 'on'
+    wordWrap: 'on',
+    renderLineHighlight: 'line',
+    overviewRulerBorder: false
   }
 
   if (props.path) {
@@ -114,5 +116,39 @@ onUnmounted(() => {
 .monaco-container {
   width: 100%;
   height: 100%;
+}
+
+:deep(.monaco-editor .current-line) {
+  border: none !important;
+  background-color: rgba(255, 255, 255, 0.03) !important;
+}
+
+:deep(.monaco-editor .selected-text) {
+  background-color: rgba(55, 148, 255, 0.3) !important;
+}
+
+:deep(.monaco-editor .margin) {
+  background-color: transparent !important;
+}
+
+:deep(.monaco-editor .line-numbers) {
+  color: #6e7681 !important;
+}
+
+:deep(.monaco-editor .current-line-line-number) {
+  color: #e6edf3 !important;
+  font-weight: 600 !important;
+}
+
+:deep(.monaco-editor .view-overlays .current-line) {
+  border: none !important;
+}
+
+:deep(.monaco-editor.focused) {
+  outline: none !important;
+}
+
+:deep(.monaco-editor .focused .selected-text) {
+  background-color: rgba(55, 148, 255, 0.4) !important;
 }
 </style>
