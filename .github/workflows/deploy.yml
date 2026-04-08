@@ -1,0 +1,48 @@
+name: Build & Deploy
+
+on:
+  push:
+    branches: [main, master]
+
+env:
+  REGISTRY: registry.sviniabanditka.com
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Login to registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.REGISTRY_USERNAME }}
+          password: ${{ secrets.REGISTRY_PASSWORD }}
+
+      - name: Build and push Backend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          push: true
+          tags: ${{ env.REGISTRY }}/webide-backend:${{ github.sha }},${{ env.REGISTRY }}/webide-backend:latest
+
+      - name: Build and push Frontend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          push: true
+          tags: ${{ env.REGISTRY }}/webide-frontend:${{ github.sha }},${{ env.REGISTRY }}/webide-frontend:latest
+
+      - name: Deploy to k3s
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ssh.sviniabanditka.com
+          username: root
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+            kubectl -n webide set image deployment/webide-backend webide-backend=${{ env.REGISTRY }}/webide-backend:${{ github.sha }}
+            kubectl -n webide set image deployment/webide-frontend webide-frontend=${{ env.REGISTRY }}/webide-frontend:${{ github.sha }}
+            kubectl -n webide rollout status deployment/webide-backend --timeout=120s
+            kubectl -n webide rollout status deployment/webide-frontend --timeout=120s
