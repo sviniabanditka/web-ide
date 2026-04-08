@@ -1,0 +1,24 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: webide-ingress
+  namespace: webide
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  ingressClassName: traefik
+  tls:
+    - hosts:
+        - webide.sviniabanditka.com
+      secretName: webide-tls
+  rules:
+    - host: webide.sviniabanditka.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: webide-frontend
+                port:
+                  number: 80

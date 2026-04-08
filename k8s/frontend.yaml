@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webide-frontend
+  namespace: webide
+  labels:
+    app: webide-frontend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: webide-frontend
+  template:
+    metadata:
+      labels:
+        app: webide-frontend
+    spec:
+      containers:
+        - name: webide-frontend
+          image: registry.sviniabanditka.com/webide-frontend:latest
+          ports:
+            - containerPort: 80
+          resources:
+            requests:
+              memory: 64Mi
+            limits:
+              memory: 128Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: webide-frontend
+  namespace: webide
+spec:
+  selector:
+    app: webide-frontend
+  ports:
+    - port: 80
+      targetPort: 80
